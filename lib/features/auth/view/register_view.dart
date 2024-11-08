@@ -1,11 +1,10 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test_case/features/auth/model/auth_failure.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/auth/widgets/auth_button.dart';
 import 'package:test_case/features/auth/widgets/auth_text_field.dart';
-import 'package:test_case/features/home/view/home_view.dart';
+import 'package:test_case/features/chat/view/chat_list_view.dart';
 import '../providers/auth_providers.dart';
 
 class RegisterView extends ConsumerStatefulWidget {
@@ -20,6 +19,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _usernameController = TextEditingController();
+  bool _isAdmin = false;
 
   Future<void> _handleSubmit() async {
     if (_formKey.currentState?.validate() ?? false) {
@@ -28,6 +28,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
             email: _emailController.text.trim(),
             password: _passwordController.text,
             username: _usernameController.text.trim(),
+            role: _isAdmin ? UserRole.admin : UserRole.user,
           );
 
       if (mounted) {
@@ -40,7 +41,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
           );
         } else {
           Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (context) => const HomeView()),
+            MaterialPageRoute(builder: (context) => const ChatListView()),
             (route) => false,
           );
         }
@@ -56,7 +57,7 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
         next.whenData((user) {
           if (user != null && mounted) {
             Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (context) => const HomeView()),
+              MaterialPageRoute(builder: (context) => const ChatListView()),
               (route) => false,
             );
           }
@@ -122,6 +123,16 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
                   },
                 ),
                 const SizedBox(height: 24),
+                SwitchListTile(
+                  title: const Text('Admin Account'),
+                  value: _isAdmin,
+                  onChanged: (bool value) {
+                    setState(() {
+                      _isAdmin = value;
+                    });
+                  },
+                ),
+                const SizedBox(height: 16),
                 if (authState.isLoading)
                   const Center(child: CircularProgressIndicator())
                 else

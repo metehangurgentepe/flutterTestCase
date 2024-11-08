@@ -347,8 +347,6 @@ abstract class _$$AuthenticatedImplCopyWith<$Res> {
       __$$AuthenticatedImplCopyWithImpl<$Res>;
   @useResult
   $Res call({UserModel user});
-
-  $UserModelCopyWith<$Res> get user;
 }
 
 /// @nodoc
@@ -372,16 +370,6 @@ class __$$AuthenticatedImplCopyWithImpl<$Res>
           : user // ignore: cast_nullable_to_non_nullable
               as UserModel,
     ));
-  }
-
-  /// Create a copy of AuthState
-  /// with the given fields replaced by the non-null parameter values.
-  @override
-  @pragma('vm:prefer-inline')
-  $UserModelCopyWith<$Res> get user {
-    return $UserModelCopyWith<$Res>(_value.user, (value) {
-      return _then(_value.copyWith(user: value));
-    });
   }
 }
 

@@ -2,6 +2,19 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        jcenter()
+    }
+}
+
+buildscript {
+    ext.kotlin_version = '1.9.0' // Bu satırı ekleyin
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.1.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 

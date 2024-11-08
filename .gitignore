@@ -60,7 +60,8 @@ lib/generated_plugin_registrant.dart
 
 # Environment files
 .env
-.env.*
+.env.development
+.env.production
 
 # Others
 *.class

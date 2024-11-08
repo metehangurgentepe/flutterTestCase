@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/home/view/home_view.dart';
+import 'package:test_case/features/chat/view/chat_list_view.dart';
 import '../providers/auth_providers.dart';
 import 'login_view.dart';
 
@@ -14,7 +14,7 @@ class AuthWrapper extends ConsumerWidget {
     return authState.when(
       data: (user) {
         if (user != null) {
-          return const HomeView();
+          return const ChatListView();
         }
         return const LoginView();
       },

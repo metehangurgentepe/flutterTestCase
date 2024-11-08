@@ -14,6 +14,7 @@ abstract class IAuthRepository {
     required String email,
     required String password,
     required String username,
+    required UserRole role,
   });
 
   Future<Either<AuthFailure, Unit>> signOut();
@@ -58,6 +59,7 @@ class AuthRepository implements IAuthRepository {
             'username': email.split('@')[0],
             'email': email,
             'created_at': DateTime.now().toIso8601String(),
+            'role': UserRole.user.toString().split('.').last,
           };
 
           await _supabase.from('profiles').insert(newProfile);
@@ -67,6 +69,7 @@ class AuthRepository implements IAuthRepository {
             username: email.split('@')[0],
             email: email,
             createdAt: DateTime.now(),
+            role: UserRole.user,
           ));
         }
 
@@ -77,6 +80,7 @@ class AuthRepository implements IAuthRepository {
           username: email.split('@')[0],
           email: email,
           createdAt: DateTime.now(),
+          role: UserRole.user,
         ));
       }
     } catch (e) {
@@ -95,10 +99,11 @@ class AuthRepository implements IAuthRepository {
     required String email,
     required String password,
     required String username,
+    required UserRole role,
   }) async {
     try {
       final response = await _supabase.auth.signUp(
-        email:email,
+        email: email,
         password: password
       );
 
@@ -114,6 +119,7 @@ class AuthRepository implements IAuthRepository {
           'created_at': DateTime.now().toIso8601String(),
           'is_online': true,
           'last_seen': DateTime.now().toIso8601String(),
+          'role': role.toString().split('.').last,
         };
 
         await _supabase.from('profiles').insert(userProfile);
@@ -123,6 +129,7 @@ class AuthRepository implements IAuthRepository {
           username: username,
           email: email,
           createdAt: DateTime.now(),
+          role: role,
         ));
       } catch (e) {
         return left(const AuthFailure.serverError());
@@ -165,6 +172,7 @@ class AuthRepository implements IAuthRepository {
             'username': user.email?.split('@')[0] ?? 'user',
             'email': user.email,
             'created_at': DateTime.now().toIso8601String(),
+            'role': UserRole.user.toString().split('.').last,
           };
 
           await _supabase.from('profiles').insert(newProfile);
@@ -185,6 +193,7 @@ class AuthRepository implements IAuthRepository {
           username: user.email?.split('@')[0] ?? 'user',
           email: user.email ?? '',
           createdAt: DateTime.now(),
+          role: UserRole.user,
         ));
       }
     } catch (e) {
@@ -211,7 +220,8 @@ class AuthRepository implements IAuthRepository {
           id: user.id,
           username: user.email ?? '',
           createdAt: DateTime.now(),
-          email: '',
+          email: '', 
+          role: UserRole.user,
         ));
       }
     });
@@ -239,7 +249,8 @@ Future<Either<AuthFailure, UserModel>> checkAuthStatus() async {
         id: user.id,
         username: user.email?.split('@')[0] ?? 'user',
         email: user.email ?? '',
-        createdAt: DateTime.now(),
+        createdAt: DateTime.now(), 
+        role: UserRole.user,
       ));
     }
   } catch (e) {
