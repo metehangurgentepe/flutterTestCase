@@ -4,6 +4,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:test_case/core/providers/life_cycle_provider.dart';
+import 'package:test_case/core/routes/app_router.dart';
 import 'package:test_case/core/utils/helpers/notification_service.dart';
 import 'package:test_case/core/utils/helpers/presence_service.dart';
 import 'package:test_case/features/auth/view/auth_wrapper.dart';
@@ -63,26 +64,13 @@ class MyApp extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     ref.watch(lifecycleHandlerProvider);
-    return MaterialApp(
-      scaffoldMessengerKey: GlobalKey<ScaffoldMessengerState>(),
-      title: 'Chat App',
+    return MaterialApp.router(
+      routerConfig: AppRouter.router,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      routes: {
-        '/chat': (context) {
-          final args = ModalRoute.of(context)!.settings.arguments
-              as Map<String, dynamic>;
-          return ChatRoomView(
-            roomId: args['roomId'] as String,
-            roomName: args['roomName'] as String,
-          );
-        },
-      },
-      home: const AuthWrapper(),
-      navigatorObservers: [MyNavigatorObserver()],
     );
   }
 }
