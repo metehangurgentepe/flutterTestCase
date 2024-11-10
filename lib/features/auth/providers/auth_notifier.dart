@@ -3,21 +3,40 @@ import 'package:test_case/features/auth/model/auth_failure.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/auth/repository/auth_repository.dart';
 import 'package:test_case/features/chat/provider/chat_provider.dart';
+import 'package:test_case/features/notifications/service/notification_service.dart';
 
 class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
   final IAuthRepository _repository;
   final T Function<T>(ProviderListenable<T>) _read;
+  final NotificationService _notificationService;
 
-  AuthNotifier(this._repository, this._read) : super(const AsyncValue.loading()) {
+  AuthNotifier(this._repository, this._read, this._notificationService) 
+      : super(const AsyncValue.loading()) {
     _init();
   }
 
   Future<void> _init() async {
-    final userOption = await _repository.getCurrentUser();
-    state = AsyncValue.data(userOption.toNullable());
-    
-    if (state.value != null) {
-      await _initializePresence();
+    try {
+      final userOption = await _repository.getCurrentUser();
+      state = AsyncValue.data(userOption.toNullable());
+      
+      if (state.value != null) {
+        await _initializePresence();
+        await _initializeNotifications();
+      }
+    } catch (e, stackTrace) {
+      state = AsyncValue.error(e, stackTrace);
+    }
+  }
+
+  Future<void> _initializeNotifications() async {
+    try {
+      await _notificationService.initialize();
+      await _notificationService.setupToken();
+      
+      _notificationService.listenToTokenRefresh();
+    } catch (e) {
+      print('Error initializing notifications in AuthNotifier: $e');
     }
   }
 
@@ -50,18 +69,17 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
 
       return result.fold(
         (failure) {
-          print('AuthNotifier: Login failed with ${failure.toErrorMessage()}');
           state = AsyncValue.error(failure, StackTrace.current);
           return failure;
         },
         (user) async {
           state = AsyncValue.data(user);
-          await _initializePresence(); 
+          await _initializePresence();
+          await _initializeNotifications();
           return null;
         },
       );
     } catch (e, stackTrace) {
-      print('AuthNotifier: Unexpected error $e');
       final failure = AuthFailure.serverError();
       state = AsyncValue.error(failure, stackTrace);
       return failure;
@@ -94,6 +112,7 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
         (user) async {
           state = AsyncValue.data(user);
           await _initializePresence();
+          await _initializeNotifications();
           return null;
         },
       );

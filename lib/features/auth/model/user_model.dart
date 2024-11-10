@@ -7,6 +7,11 @@ enum UserRole {
   user
 }
 
+enum Platform {
+  ios,
+  android
+}
+
 class UserModel {
   final String id;
   final String username;
@@ -20,6 +25,8 @@ class UserModel {
   final DateTime? lastSeen;
   final DateTime? updatedAt;
   final String? avatarUrl;
+  final String? fcmToken;
+  final Platform? platform;
 
   const UserModel({
     required this.id,
@@ -34,6 +41,8 @@ class UserModel {
     this.lastSeen,
     this.updatedAt,
     this.avatarUrl,
+    this.fcmToken,
+    this.platform,
   });
 
   factory UserModel.fromJson(Map<String, dynamic> json) {
@@ -56,7 +65,20 @@ class UserModel {
           ? DateTime.parse(json['updated_at'] as String)
           : null,
       avatarUrl: json['avatar_url'] as String?,
+      fcmToken: json['fcm_token'] as String?,
+      platform: _platformFromString(json['platform'] as String?),
     );
+  }
+
+  static Platform? _platformFromString(String? platform) {
+    switch (platform?.toLowerCase()) {
+      case 'ios':
+        return Platform.ios;
+      case 'android':
+        return Platform.android;
+      default:
+        return null;
+    }
   }
 
   Map<String, dynamic> toJson() {
@@ -73,6 +95,8 @@ class UserModel {
       'last_seen': lastSeen?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
       'avatar_url': avatarUrl,
+      'fcm_token': fcmToken,
+      'platform': platform?.toString(),
     };
   }
 
@@ -136,6 +160,8 @@ class UserModel {
       lastSeen,
       updatedAt,
       avatarUrl,
+      fcmToken,
+      platform,
     );
   }
 
@@ -153,6 +179,8 @@ class UserModel {
     DateTime? lastSeen,
     DateTime? updatedAt,
     String? avatarUrl,
+    String? fcmToken,
+    Platform? platform,
   }) {
     return UserModel(
       id: id ?? this.id,
@@ -167,11 +195,13 @@ class UserModel {
       lastSeen: lastSeen ?? this.lastSeen,
       updatedAt: updatedAt ?? this.updatedAt,
       avatarUrl: avatarUrl ?? this.avatarUrl,
+      fcmToken: fcmToken ?? this.fcmToken,
+      platform: platform ?? this.platform,
     );
   }
 
   @override
   String toString() {
-    return 'UserModel(id: $id, username: $username, email: $email, role: $role, isOnline: $isOnline)';
+    return 'UserModel(id: $id, username: $username, email: $email, role: $role, isOnline: $isOnline, platform: $platform)';
   }
 }

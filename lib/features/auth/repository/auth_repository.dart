@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:fpdart/fpdart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:test_case/features/notifications/service/notification_service.dart';
 import '../model/auth_failure.dart';
 import '../model/user_model.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 
 abstract class IAuthRepository {
   Future<Either<AuthFailure, UserModel>> signInWithEmailAndPassword({
@@ -28,8 +31,9 @@ abstract class IAuthRepository {
 
 class AuthRepository implements IAuthRepository {
   final SupabaseClient _supabase;
+  final NotificationService _notificationService;
 
-  AuthRepository(this._supabase);
+  AuthRepository(this._supabase, this._notificationService);
 
   @override
   Future<Either<AuthFailure, UserModel>> signInWithEmailAndPassword({
@@ -46,12 +50,21 @@ class AuthRepository implements IAuthRepository {
         return left(const AuthFailure.invalidEmailAndPasswordCombination());
       }
 
+      await _notificationService.initialize();
+      final token = await FirebaseMessaging.instance.getToken();
+      
       try {
         final userData = await _supabase
             .from('profiles')
+            .upsert({
+              'id': response.user!.id,
+              'username': email.split('@')[0],
+              'email': email,
+              'fcm_token': token,
+              'platform': Platform.ios == true ? 'ios' : 'android'
+            })
             .select()
-            .eq('id', response.user!.id)
-            .single();
+            .maybeSingle();
 
         if (userData == null) {
           final newProfile = {
@@ -60,6 +73,8 @@ class AuthRepository implements IAuthRepository {
             'email': email,
             'created_at': DateTime.now().toIso8601String(),
             'role': UserRole.user.toString().split('.').last,
+            'fcm_token': token,
+            'platform': Platform.ios == 'ios' ? 'ios' : 'android',
           };
 
           await _supabase.from('profiles').insert(newProfile);
@@ -112,6 +127,9 @@ class AuthRepository implements IAuthRepository {
       }
 
       try {
+        await _notificationService.initialize();
+        final token = await FirebaseMessaging.instance.getToken();
+        
         final userProfile = {
           'id': response.user!.id,
           'username': username,
@@ -120,6 +138,12 @@ class AuthRepository implements IAuthRepository {
           'is_online': true,
           'last_seen': DateTime.now().toIso8601String(),
           'role': role.toString().split('.').last,
+          'fcm_token': token,
+          'platform': Platform.ios == 'ios' ? 'ios' : 'android',
+          'message_limit': 100,
+          'can_create_group': false,
+          'is_verified': false,
+          'updated_at': DateTime.now().toIso8601String(),
         };
 
         await _supabase.from('profiles').insert(userProfile);
