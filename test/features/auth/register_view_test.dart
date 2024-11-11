@@ -1,44 +1,78 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:mocktail/mocktail.dart';
-import 'package:test_case/features/auth/providers/auth_notifier.dart';
-import 'package:test_case/features/auth/providers/auth_providers.dart';
-import 'package:test_case/features/auth/view/register_view.dart';
+import 'dart:async';
 
-class MockAuthNotifier extends Mock implements AuthNotifier {}
-class MockNavigatorObserver extends Mock implements NavigatorObserver {}
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:mocktail/mocktail.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:test_case/core/services/auth_service.dart';
+import 'package:test_case/features/auth/model/auth_failure.dart';
+import 'package:test_case/features/auth/model/user_model.dart';
+import 'package:test_case/features/auth/notifiers/auth_notifier.dart';
+import 'package:test_case/features/auth/providers/providers.dart';
+import 'package:test_case/features/auth/view/register_view.dart';
+import 'package:test_case/features/auth/widgets/auth_button.dart';
+import 'package:test_case/features/home/view/home_view.dart';
+
+class MockAuthService extends Mock implements IAuthService {}
+
+class MockSupabaseClient extends Mock implements SupabaseClient {}
+
+class MockGoTrueClient extends Mock implements GoTrueClient {}
 
 void main() {
-  late MockAuthNotifier mockAuthNotifier;
-  late MockNavigatorObserver mockNavigatorObserver;
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  late MockAuthService mockAuthService;
+  late AuthNotifier authNotifier;
+  late MockSupabaseClient mockSupabaseClient;
+  late MockGoTrueClient mockGoTrueClient;
+
+  setUpAll(() {
+    registerFallbackValue(UserRole.user);
+
+    mockSupabaseClient = MockSupabaseClient();
+    mockGoTrueClient = MockGoTrueClient();
+
+    when(() => mockSupabaseClient.auth).thenReturn(mockGoTrueClient);
+    when(() => mockGoTrueClient.onAuthStateChange)
+        .thenAnswer((_) => Stream.value(AuthState(
+              AuthChangeEvent.signedOut,
+              null,
+            )));
+
+    Supabase.initialize(
+      url: 'mock-url',
+      anonKey: 'mock-key',
+    );
+  });
 
   setUp(() {
-    mockAuthNotifier = MockAuthNotifier();
-    mockNavigatorObserver = MockNavigatorObserver();
-    
-    // when(() => mockAuthNotifier.isLoading).thenReturn(false);
+    mockAuthService = MockAuthService();
+    authNotifier = AuthNotifier(mockAuthService);
+
+    when(() => mockAuthService.currentUser).thenReturn(null);
+    when(() => mockAuthService.authStateChanges())
+        .thenAnswer((_) => Stream.value(null));
   });
 
   Widget createWidgetUnderTest() {
     return ProviderScope(
       overrides: [
-        authStateProvider.overrideWith((ref) => mockAuthNotifier),
+        authStateProvider.overrideWith((ref) => authNotifier),
       ],
       child: MaterialApp(
         home: const RegisterView(),
-        navigatorObservers: [mockNavigatorObserver],
       ),
     );
   }
 
-  group('RegisterView', () {
-    testWidgets('shows validation errors when fields are empty', 
-    (WidgetTester tester) async {
+  group('RegisterView Widget Tests', () {
+    testWidgets('shows validation errors when form is submitted empty',
+        (WidgetTester tester) async {
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final registerButton = find.text('Register');
-      await tester.tap(registerButton);
+      await tester.tap(find.byType(AuthButton));
       await tester.pump();
 
       expect(find.text('Please enter a username'), findsOneWidget);
@@ -46,103 +80,174 @@ void main() {
       expect(find.text('Please enter a password'), findsOneWidget);
     });
 
-    testWidgets('shows validation error for short username', 
-    (WidgetTester tester) async {
+    testWidgets('shows error for invalid username',
+        (WidgetTester tester) async {
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final usernameField = find.widgetWithText(TextFormField, 'Username');
-      await tester.enterText(usernameField, 'ab');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Username'), 'ab');
 
-      final registerButton = find.text('Register');
-      await tester.tap(registerButton);
+      await tester.tap(find.byType(AuthButton));
       await tester.pump();
 
-      expect(find.text('Username must be at least 3 characters'), findsOneWidget);
+      expect(
+          find.text('Username must be at least 3 characters'), findsOneWidget);
     });
 
-    testWidgets('shows validation error for invalid email', 
-    (WidgetTester tester) async {
+    testWidgets('shows error for invalid email format',
+        (WidgetTester tester) async {
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final emailField = find.widgetWithText(TextFormField, 'Email');
-      await tester.enterText(emailField, 'invalid-email');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Email'), 'invalid-email');
 
-      final registerButton = find.text('Register');
-      await tester.tap(registerButton);
+      await tester.tap(find.byType(AuthButton));
       await tester.pump();
 
       expect(find.text('Please enter a valid email'), findsOneWidget);
     });
 
-    testWidgets('shows validation error for short password', 
-    (WidgetTester tester) async {
+    testWidgets('shows error for short password', (WidgetTester tester) async {
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final passwordField = find.widgetWithText(TextFormField, 'Password');
-      await tester.enterText(passwordField, '12345');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Password'), '123');
 
-      final registerButton = find.text('Register');
-      await tester.tap(registerButton);
+      await tester.tap(find.byType(AuthButton));
       await tester.pump();
 
-      expect(find.text('Password must be at least 6 characters'), findsOneWidget);
+      expect(
+          find.text('Password must be at least 6 characters'), findsOneWidget);
     });
 
-    testWidgets('navigates back to login when login button is tapped', 
-    (WidgetTester tester) async {
+    testWidgets('calls sign up when form is valid',
+        (WidgetTester tester) async {
+      when(() => mockAuthService.signUp(
+            email: 'test@example.com',
+            password: 'password123',
+            username: 'testuser',
+            role: UserRole.user,
+          )).thenAnswer((_) async => null);
+
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final loginButton = find.text('Already have an account? Login');
-      await tester.tap(loginButton);
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Username'), 'testuser');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Email'), 'test@example.com');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Password'), 'password123');
+
+      await tester.tap(find.byType(AuthButton));
       await tester.pumpAndSettle();
 
-      verify(() => mockNavigatorObserver.didPop(any(), any())).called(1);
+      verify(() => mockAuthService.signUp(
+            email: 'test@example.com',
+            password: 'password123',
+            username: 'testuser',
+            role: UserRole.user,
+          )).called(1);
     });
 
-    // testWidgets('shows loading indicator when registration is in progress', 
-    // (WidgetTester tester) async {
-    //   final asyncLoading = AsyncLoading<UserModel?>();
-      
-    //   await tester.pumpWidget(
-    //     ProviderScope(
-    //       overrides: [
-    //         authStateProvider.overrideWith((ref) => mockAuthNotifier),
-    //       ],
-    //       child: MaterialApp(
-    //         home: const RegisterView(),
-    //         navigatorObservers: [mockNavigatorObserver],
-    //       ),
-    //     ),
-    //   );
+    testWidgets('calls sign up with admin role when admin switch is on',
+        (WidgetTester tester) async {
+      when(() => mockAuthService.signUp(
+            email: 'admin@example.com',
+            password: 'password123',
+            username: 'adminuser',
+            role: UserRole.admin,
+          )).thenAnswer((_) async => null);
 
-    //   expect(find.byType(CircularProgressIndicator), findsOneWidget);
-    // });
-
-    testWidgets('submits form with valid data', 
-    (WidgetTester tester) async {
       await tester.pumpWidget(createWidgetUnderTest());
 
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Username'), 
-        'testuser'
-      );
+          find.widgetWithText(TextFormField, 'Username'), 'adminuser');
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Email'), 
-        'test@example.com'
-      );
+          find.widgetWithText(TextFormField, 'Email'), 'admin@example.com');
       await tester.enterText(
-        find.widgetWithText(TextFormField, 'Password'), 
-        'password123'
-      );
+          find.widgetWithText(TextFormField, 'Password'), 'password123');
 
-      final registerButton = find.text('Register');
-      await tester.tap(registerButton);
+      await tester.tap(find.byType(Switch));
       await tester.pump();
 
-      // Form should be valid - no validation error messages
-      expect(find.text('Please enter a username'), findsNothing);
-      expect(find.text('Please enter your email'), findsNothing);
-      expect(find.text('Please enter a password'), findsNothing);
+      await tester.tap(find.byType(AuthButton));
+      await tester.pumpAndSettle();
+
+      verify(() => mockAuthService.signUp(
+            email: 'admin@example.com',
+            password: 'password123',
+            username: 'adminuser',
+            role: UserRole.admin,
+          )).called(1);
+    });
+
+    testWidgets('shows error message when registration fails',
+        (WidgetTester tester) async {
+      when(() => mockAuthService.signUp(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+            username: any(named: 'username'),
+            role: any(named: 'role'),
+          )).thenAnswer((_) async => const AuthFailure.emailAlreadyInUse());
+
+      await tester.pumpWidget(createWidgetUnderTest());
+
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Username'), 'testuser');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Email'), 'test@example.com');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Password'), 'password123');
+
+      await tester.tap(find.byType(AuthButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(
+        find.text(
+            'This email is already registered. Please try a different email.'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('shows loading indicator during registration',
+        (WidgetTester tester) async {
+      final completer = Completer<AuthFailure?>();
+
+      when(() => mockAuthService.signUp(
+            email: any(named: 'email'),
+            password: any(named: 'password'),
+            username: any(named: 'username'),
+            role: any(named: 'role'),
+          )).thenAnswer((_) => completer.future);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Username'), 'testuser');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Email'), 'test@example.com');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Password'), 'password123');
+
+      await tester.tap(find.byType(AuthButton));
+      await tester.pump();
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      completer.complete(null);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('navigates back to login when login button is tapped',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(createWidgetUnderTest());
+
+      await tester.tap(find.text('Already have an account? Login'));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RegisterView), findsNothing);
     });
   });
 }

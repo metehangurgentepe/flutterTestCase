@@ -1,246 +1,235 @@
-import 'dart:async';
-
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:mocktail/mocktail.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:fpdart/fpdart.dart';
+import 'package:mockito/annotations.dart';
+import 'package:mockito/mockito.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:test_case/features/auth/model/auth_failure.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/auth/repository/auth_repository.dart';
-import 'package:test_case/features/notifications/service/notification_service.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:test_case/features/auth/repository/profile_repository.dart';
+import 'package:test_case/core/notifications/service/notification_service.dart';
+import 'package:get_it/get_it.dart';
 
-// Mock classes
-class MockSupabaseClient extends Mock implements SupabaseClient {}
-class MockGoTrueClient extends Mock implements GoTrueClient {}
-class MockUser extends Mock implements User {}
-class MockNotificationService extends Mock implements NotificationService {}
-class MockFirebaseMessaging extends Mock implements FirebaseMessaging {}
-class MockSupabaseQueryBuilder extends Mock implements SupabaseQueryBuilder {}
-class MockFilterBuilder extends Mock implements PostgrestFilterBuilder {}
-class MockSelectBuilder extends Mock implements PostgrestTransformBuilder<PostgrestList> {}
-class MockMaybeSingleBuilder extends Mock 
-    implements PostgrestTransformBuilder<Map<String, dynamic>?> {
-  @override
-  Future<U> then<U>(
-    FutureOr<U> Function(Map<String, dynamic>?) onValue, {
-    Function? onError,
-  }) =>
-      Future.value(onValue(null));
-}
+import 'auth_repository_test.mocks.dart';
 
+@GenerateNiceMocks([
+  MockSpec<SupabaseClient>(),
+  MockSpec<NotificationService>(),
+  MockSpec<ProfileRepository>(),
+  MockSpec<GoTrueClient>(),
+  MockSpec<FirebaseMessaging>(),
+])
 void main() {
-  late MockSupabaseClient supabaseClient;
-  late MockGoTrueClient authClient;
-  late MockNotificationService notificationService;
   late AuthRepository authRepository;
-  late MockUser mockUser;
-  late MockSupabaseQueryBuilder queryBuilder;
-  late MockFilterBuilder filterBuilder;
-  late MockSelectBuilder selectBuilder;
-  late MockMaybeSingleBuilder maybeSingleBuilder;
+  late MockSupabaseClient mockSupabaseClient;
+  late MockNotificationService mockNotificationService;
+  late MockProfileRepository mockProfileRepository;
+  late MockGoTrueClient mockGoTrueClient;
+  late MockFirebaseMessaging mockFirebaseMessaging;
+
+  setUpAll(() {
+    provideDummy<Either<AuthFailure, UserModel>>(
+      Right(UserModel(
+        id: 'dummy-id',
+        email: 'dummy@test.com',
+        username: 'dummy',
+        role: UserRole.user,
+        createdAt: DateTime.now(),
+      )),
+    );
+
+    provideDummy<Either<AuthFailure, Unit>>(
+      const Right(unit),
+    );
+
+    provideDummy<Option<UserModel>>(
+      const None(),
+    );
+
+    mockFirebaseMessaging = MockFirebaseMessaging();
+    GetIt.I.registerSingleton<FirebaseMessaging>(mockFirebaseMessaging);
+    when(mockFirebaseMessaging.getToken())
+        .thenAnswer((_) async => 'mock-fcm-token');
+  });
 
   setUp(() {
-    supabaseClient = MockSupabaseClient();
-    authClient = MockGoTrueClient();
-    notificationService = MockNotificationService();
-    mockUser = MockUser();
-    queryBuilder = MockSupabaseQueryBuilder();
-    filterBuilder = MockFilterBuilder();
-    selectBuilder = MockSelectBuilder();
-    maybeSingleBuilder = MockMaybeSingleBuilder();
-    
-    when(() => supabaseClient.auth).thenReturn(authClient);
-    authRepository = AuthRepository(supabaseClient, notificationService);
+    mockSupabaseClient = MockSupabaseClient();
+    mockNotificationService = MockNotificationService();
+    mockProfileRepository = MockProfileRepository();
+    mockGoTrueClient = MockGoTrueClient();
+    when(mockSupabaseClient.auth).thenReturn(mockGoTrueClient);
 
-    registerFallbackValue({});
+    authRepository = AuthRepository(
+      mockSupabaseClient,
+      mockNotificationService,
+      mockProfileRepository,
+    );
+
+    TestWidgetsFlutterBinding.ensureInitialized();
+  });
+
+  tearDown(() {
+    GetIt.I.reset();
   });
 
   group('signInWithEmailAndPassword', () {
-    const testEmail = 'test@example.com';
-    const testPassword = 'password123';
-    const testUserId = 'test-id';
-    const testFcmToken = 'test-fcm-token';
+    const email = 'test@test.com';
+    const password = 'password123';
+    final user = User(
+      id: 'testId',
+      email: email,
+      appMetadata: const {},
+      userMetadata: const {},
+      aud: '',
+      createdAt: '',
+    );
 
-    setUp(() {
-      when(() => mockUser.id).thenReturn(testUserId);
-      when(() => mockUser.email).thenReturn(testEmail);
-      when(() => notificationService.initialize())
-          .thenAnswer((_) async => null);
-    });
-
-    test('successful login with existing profile', () async {
-      // Arrange
-      when(() => authClient.signInWithPassword(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-          )).thenAnswer((_) async => AuthResponse(user: mockUser));
-
-      final mockProfileData = {
-        'id': testUserId,
-        'email': testEmail,
-        'username': 'testuser',
-        'created_at': DateTime.now().toIso8601String(),
-        'role': 'user',
-      };
-
-      // Setup the query builder chain
-      when(() => supabaseClient.from(any())).thenReturn(queryBuilder);
-      when(() => queryBuilder.upsert(any())).thenReturn(filterBuilder);
-      when(() => filterBuilder.select()).thenReturn(selectBuilder);
-      when(() => selectBuilder.maybeSingle()).thenReturn(maybeSingleBuilder);
-      
-      // Mock the Future behavior
-      when(() => maybeSingleBuilder.then(any(), onError: any(named: 'onError')))
-          .thenAnswer((invocation) async => mockProfileData);
-
-      // Act
-      final result = await authRepository.signInWithEmailAndPassword(
-        email: testEmail,
-        password: testPassword,
+    test('should return UserModel when login is successful', () async {
+      final authResponse = AuthResponse(
+        session: Session(
+          accessToken: 'token',
+          refreshToken: 'refreshToken',
+          user: user,
+          expiresIn: 3600,
+          tokenType: 'bearer',
+        ),
+        user: user,
       );
 
-      // Assert
+      when(mockGoTrueClient.signInWithPassword(
+        email: anyNamed('email'),
+        password: anyNamed('password'),
+      )).thenAnswer((_) async => authResponse);
+
+      when(mockNotificationService.initialize()).thenAnswer((_) async => null);
+
+      when(mockFirebaseMessaging.getToken())
+          .thenAnswer((_) async => 'mock-fcm-token');
+
+      final userModel = UserModel(
+        id: user.id,
+        email: email,
+        username: 'testUser',
+        role: UserRole.user,
+        createdAt: DateTime.now(),
+      );
+
+      when(mockProfileRepository.getOrCreateProfile(
+        userId: user.id,
+        email: email,
+        token: 'mock-fcm-token',
+      )).thenAnswer((_) async => Right(userModel));
+
+      final result = await authRepository.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      verify(mockGoTrueClient.signInWithPassword(
+        email: email,
+        password: password,
+      )).called(1);
+
+      verify(mockNotificationService.initialize()).called(1);
+
+      verify(mockProfileRepository.getOrCreateProfile(
+        userId: user.id,
+        email: email,
+        token: 'mock-fcm-token',
+      )).called(1);
+
       expect(result.isRight(), true);
       result.fold(
-        (failure) => fail('Should not return failure'),
-        (userModel) {
-          expect(userModel.id, equals(testUserId));
-          expect(userModel.email, equals(testEmail));
-          expect(userModel.username, equals('testuser'));
+        (l) => fail('Should not return left: $l'),
+        (r) {
+          expect(r.id, equals(userModel.id));
+          expect(r.email, equals(userModel.email));
+          expect(r.username, equals(userModel.username));
+          expect(r.role, equals(userModel.role));
         },
       );
-
-      verify(() => notificationService.initialize()).called(1);
-      verify(() => supabaseClient.from('profiles')).called(1);
-      verify(() => queryBuilder.upsert(any())).called(1);
     });
 
-    test('successful login with new profile creation', () async {
-      // Arrange
-      when(() => authClient.signInWithPassword(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-          )).thenAnswer((_) async => AuthResponse(user: mockUser));
+    test('should return AuthFailure when login credentials are invalid',
+        () async {
+      when(mockGoTrueClient.signInWithPassword(
+        email: anyNamed('email'),
+        password: anyNamed('password'),
+      )).thenThrow('Invalid login credentials');
 
-      // Setup the query builder chain
-      when(() => supabaseClient.from(any())).thenReturn(queryBuilder);
-      when(() => queryBuilder.upsert(any())).thenReturn(filterBuilder);
-      when(() => filterBuilder.select()).thenReturn(selectBuilder);
-      when(() => selectBuilder.maybeSingle()).thenReturn(maybeSingleBuilder);
-      
-      // Mock the Future to return null
-      when(() => maybeSingleBuilder.then(any(), onError: any(named: 'onError')))
-          .thenAnswer((invocation) async => null);
-
-      // For profile creation
-      when(() => queryBuilder.insert(any())).thenReturn(filterBuilder);
-
-      // Act
       final result = await authRepository.signInWithEmailAndPassword(
-        email: testEmail,
-        password: testPassword,
+        email: email,
+        password: password,
       );
 
-      // Assert
-      expect(result.isRight(), true);
-      result.fold(
-        (failure) => fail('Should not return failure'),
-        (userModel) {
-          expect(userModel.id, equals(testUserId));
-          expect(userModel.email, equals(testEmail));
-          expect(userModel.username, equals(testEmail.split('@')[0]));
-          expect(userModel.role, equals(UserRole.user));
-        },
-      );
-
-      verify(() => supabaseClient.from('profiles')).called(1);
-      verify(() => queryBuilder.upsert(any())).called(1);
-    });
-
-    test('invalid credentials', () async {
-      // Arrange
-      when(() => authClient.signInWithPassword(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-          )).thenThrow('Invalid login credentials');
-
-      // Act
-      final result = await authRepository.signInWithEmailAndPassword(
-        email: testEmail,
-        password: testPassword,
-      );
-
-      // Assert
       expect(result.isLeft(), true);
       result.fold(
-        (failure) => expect(failure,
-            const AuthFailure.invalidEmailAndPasswordCombination()),
-        (userModel) => fail('Should not return user model'),
+        (l) =>
+            expect(l, const AuthFailure.invalidEmailAndPasswordCombination()),
+        (r) => fail('Should not return right'),
       );
-
-      verifyNever(() => notificationService.initialize());
-      verifyNever(() => supabaseClient.from(any()));
-    });
-
-    test('server error', () async {
-      // Arrange
-      when(() => authClient.signInWithPassword(
-            email: any(named: 'email'),
-            password: any(named: 'password'),
-          )).thenThrow('Database error');
-
-      // Act
-      final result = await authRepository.signInWithEmailAndPassword(
-        email: testEmail,
-        password: testPassword,
-      );
-
-      // Assert
-      expect(result.isLeft(), true);
-      result.fold(
-        (failure) => expect(failure, const AuthFailure.serverError()),
-        (userModel) => fail('Should not return user model'),
-      );
-
-      verifyNever(() => notificationService.initialize());
-      verifyNever(() => supabaseClient.from(any()));
     });
   });
 
   group('signOut', () {
-    test('successful sign out', () async {
-      // Arrange
-      when(() => authClient.signOut()).thenAnswer((_) async => {});
+    test('should return unit when signOut is successful', () async {
+      when(mockGoTrueClient.signOut()).thenAnswer((_) async => null);
 
-      // Act
       final result = await authRepository.signOut();
 
-      // Assert
       expect(result.isRight(), true);
-      result.fold(
-        (failure) => fail('Should not return failure'),
-        (unit) => expect(unit, equals(unit)),
-      );
-
-      verify(() => authClient.signOut()).called(1);
+      verify(mockGoTrueClient.signOut()).called(1);
     });
 
-    test('sign out with error', () async {
-      // Arrange
-      when(() => authClient.signOut()).thenThrow('Error signing out');
+    test('should return AuthFailure when signOut fails', () async {
+      when(mockGoTrueClient.signOut()).thenThrow(Exception('Sign out failed'));
 
-      // Act
       final result = await authRepository.signOut();
 
-      // Assert
       expect(result.isLeft(), true);
       result.fold(
-        (failure) => expect(failure, const AuthFailure.serverError()),
-        (unit) => fail('Should not return unit'),
+        (l) => expect(l, const AuthFailure.serverError()),
+        (r) => fail('Should not return right'),
+      );
+    });
+  });
+
+  group('getCurrentUser', () {
+    test('should return Some(UserModel) when user is authenticated', () async {
+      final user = User(
+        id: 'testId',
+        email: 'test@test.com',
+        appMetadata: const {},
+        userMetadata: const {},
+        aud: '',
+        createdAt: '',
       );
 
-      verify(() => authClient.signOut()).called(1);
+      when(mockGoTrueClient.currentUser).thenReturn(user);
+
+      final userModel = UserModel(
+        id: 'testId',
+        email: 'test@test.com',
+        username: 'testUser',
+        role: UserRole.user,
+        createdAt: DateTime.now(),
+      );
+
+      when(mockProfileRepository.getUserProfile(user.id))
+          .thenAnswer((_) async => Some(userModel));
+
+      final result = await authRepository.getCurrentUser();
+
+      expect(result, Some(userModel));
+    });
+
+    test('should return None when user is not authenticated', () async {
+      when(mockGoTrueClient.currentUser).thenReturn(null);
+
+      final result = await authRepository.getCurrentUser();
+
+      expect(result, const None());
     });
   });
 }

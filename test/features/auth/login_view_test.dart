@@ -1,27 +1,45 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_test/flutter_test.dart';
 import 'package:mocktail/mocktail.dart';
-import 'package:test_case/features/auth/providers/auth_notifier.dart';
-import 'package:test_case/features/auth/providers/auth_providers.dart';
+import 'package:test_case/features/auth/model/auth_failure.dart';
+import 'package:test_case/features/auth/notifiers/auth_notifier.dart';
+import 'package:test_case/features/auth/providers/providers.dart';
 import 'package:test_case/features/auth/view/login_view.dart';
+import 'package:test_case/core/services/auth_service.dart';
+import 'package:test_case/features/auth/view/register_view.dart';
+import 'package:test_case/features/auth/widgets/auth_button.dart';
 
-class MockAuthNotifier extends Mock implements AuthNotifier {}
+class MockAuthService extends Mock implements IAuthService {}
+
 class MockNavigatorObserver extends Mock implements NavigatorObserver {}
 
+class FakeRoute extends Fake implements Route<dynamic> {}
+
 void main() {
-  late MockAuthNotifier mockAuthNotifier;
-  late MockNavigatorObserver mockNavigatorObserver;
+  late MockAuthService mockAuthService;
+  late AuthNotifier authNotifier;
+  late NavigatorObserver mockNavigatorObserver;
+
+  setUpAll(() {
+    registerFallbackValue(FakeRoute());
+  });
 
   setUp(() {
-    mockAuthNotifier = MockAuthNotifier();
+    mockAuthService = MockAuthService();
+    authNotifier = AuthNotifier(mockAuthService);
     mockNavigatorObserver = MockNavigatorObserver();
+
+    when(() => mockAuthService.currentUser).thenReturn(null);
+    when(() => mockAuthService.authStateChanges())
+        .thenAnswer((_) => Stream.value(null));
   });
 
   Widget createWidgetUnderTest() {
     return ProviderScope(
       overrides: [
-        authStateProvider.overrideWith((ref) => mockAuthNotifier),
+        authStateProvider.overrideWith((ref) => authNotifier),
       ],
       child: MaterialApp(
         home: const LoginView(),
@@ -30,12 +48,12 @@ void main() {
     );
   }
 
-  group('LoginView', () {
-    testWidgets('shows validation errors when fields are empty', 
-    (WidgetTester tester) async {
+  group('LoginView Widget Tests', () {
+    testWidgets('shows validation errors when form is submitted empty',
+        (WidgetTester tester) async {
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final loginButton = find.text('Login');
+      final loginButton = find.byType(AuthButton);
       await tester.tap(loginButton);
       await tester.pump();
 
@@ -43,43 +61,88 @@ void main() {
       expect(find.text('Please enter your password'), findsOneWidget);
     });
 
-    testWidgets('shows validation error for invalid email', 
-    (WidgetTester tester) async {
+    testWidgets('shows error for invalid email format',
+        (WidgetTester tester) async {
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final emailField = find.widgetWithText(TextFormField, 'Email');
-      await tester.enterText(emailField, 'invalid-email');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Email'), 'invalid-email');
 
-      final loginButton = find.text('Login');
-      await tester.tap(loginButton);
+      await tester.tap(find.byType(AuthButton));
       await tester.pump();
 
       expect(find.text('Please enter a valid email'), findsOneWidget);
     });
 
-    testWidgets('shows validation error for short password', 
-    (WidgetTester tester) async {
+    testWidgets('shows error for short password', (WidgetTester tester) async {
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final passwordField = find.widgetWithText(TextFormField, 'Password');
-      await tester.enterText(passwordField, '12345');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Password'), '123');
 
-      final loginButton = find.text('Login');
-      await tester.tap(loginButton);
+      await tester.tap(find.byType(AuthButton));
       await tester.pump();
 
-      expect(find.text('Password must be at least 6 characters'), findsOneWidget);
+      expect(
+          find.text('Password must be at least 6 characters'), findsOneWidget);
     });
 
-    testWidgets('navigates to RegisterView when register button is tapped', 
-    (WidgetTester tester) async {
+    testWidgets('calls sign in when form is valid',
+        (WidgetTester tester) async {
+      when(() => mockAuthService.signIn(
+          email: 'test@example.com',
+          password: 'password123')).thenAnswer((_) async => null);
+
       await tester.pumpWidget(createWidgetUnderTest());
 
-      final registerButton = find.text("Don't have an account? Register");
-      await tester.tap(registerButton);
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Email'), 'test@example.com');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Password'), 'password123');
+
+      await tester.tap(find.byType(AuthButton));
       await tester.pumpAndSettle();
 
-      verify(() => mockNavigatorObserver.didPush(any(), any())).called(1);
+      verify(() => mockAuthService.signIn(
+          email: 'test@example.com', password: 'password123')).called(1);
+    });
+
+    testWidgets('shows loading indicator during login',
+        (WidgetTester tester) async {
+      final completer = Completer<AuthFailure?>();
+
+      when(() => mockAuthService.signIn(
+              email: any(named: 'email'), password: any(named: 'password')))
+          .thenAnswer((_) => completer.future);
+
+      await tester.pumpWidget(createWidgetUnderTest());
+
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Email'), 'test@example.com');
+      await tester.enterText(
+          find.widgetWithText(TextFormField, 'Password'), 'password123');
+
+      await tester.tap(find.byType(AuthButton));
+      await tester.pump();
+
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+
+      completer.complete(null);
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('navigates to register view when register button is tapped',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(createWidgetUnderTest());
+
+      expect(find.byType(LoginView), findsOneWidget);
+      expect(find.byType(RegisterView), findsNothing);
+
+      await tester.tap(find.text("Don't have an account? Register"));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(RegisterView), findsOneWidget);
+      expect(find.byType(LoginView), findsNothing);
     });
   });
 }
