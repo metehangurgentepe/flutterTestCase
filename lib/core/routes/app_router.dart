@@ -1,18 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:test_case/core/routes/app_routes.dart';
 import 'package:test_case/features/auth/view/auth_wrapper.dart';
 import 'package:test_case/features/chat/view/chat_view.dart';
 
-enum AppRoute {
-  home('/'),
-  chat('/chat/:roomId');
-
-  final String path;
-  const AppRoute(this.path);
-}
-
 final class AppRouter {
+  static final _rootNavigatorKey = GlobalKey<NavigatorState>();
+
   static final router = GoRouter(
+    navigatorKey: _rootNavigatorKey,
     routes: [
       GoRoute(
         path: AppRoute.home.path,

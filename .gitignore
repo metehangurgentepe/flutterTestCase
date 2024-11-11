@@ -74,3 +74,15 @@ lib/generated_plugin_registrant.dart
 .history
 .svn/
 migrate_working_dir/
+
+
+# Firebase
+firebase.json
+lib/firebase_options.dart
+
+
+# Supabase
+ios/Runner/GoogleService-Info.plist
+android/app/google-services.json
+android/app/src/profile/google-services.json
+supabase/functions/service-account.json

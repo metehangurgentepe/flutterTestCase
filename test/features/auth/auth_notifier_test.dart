@@ -16,7 +16,7 @@ void main() {
   setUp(() {
     repository = MockAuthRepository();
     final container = ProviderContainer();
-    authNotifier = AuthNotifier(repository, container.read);
+    authNotifier = AuthNotifier(repository, container.read, notificationService);
   });
 
   test('initial state should be loading', () {
@@ -78,7 +78,7 @@ void main() {
     setUp(() {
       mockAuthRepository = MockAuthRepository();
       container = ProviderContainer();
-      authNotifier = AuthNotifier(mockAuthRepository, container.read);  // Pass container.read instead of ref
+      authNotifier = AuthNotifier(mockAuthRepository, container.read, notificationService);  // Pass container.read instead of ref
     });
 
     test('signOut should clear user state and set loading to false', () async {
