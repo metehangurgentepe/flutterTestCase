@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/auth/providers/auth_providers.dart';
-import 'package:test_case/features/chat/model/chat_room_model.dart';
+import 'package:test_case/features/auth/providers/providers.dart';
+import 'package:test_case/features/home/models/chat_room_model.dart';
 import 'package:test_case/features/chat/view/chat_view.dart';
-import 'package:test_case/features/chat/provider/chat_provider.dart';
+import 'package:test_case/features/home/providers/chat_provider.dart';
 
-// lib/features/chat/view/create_chat_sheet.dart
 class CreateChatSheet extends ConsumerStatefulWidget {
   const CreateChatSheet({super.key});
 
@@ -56,7 +55,6 @@ class _CreateChatSheetState extends ConsumerState<CreateChatSheet> {
         ),
         child: Column(
           children: [
-            // Drag handle
             Container(
               width: 40,
               height: 4,
@@ -132,11 +130,11 @@ class _CreateChatSheetState extends ConsumerState<CreateChatSheet> {
 
                             try {
                               final createdRoom = await ref
-                                  .read(chatProvider.notifier)
+                                  .read(chatListProvider.notifier)
                                   .createChatRoom(room);
 
                               if (context.mounted) {
-                                Navigator.pop(context); // Sheet'i kapat
+                                Navigator.pop(context);
                                 Navigator.push(
                                   context,
                                   MaterialPageRoute(

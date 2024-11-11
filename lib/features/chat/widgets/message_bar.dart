@@ -1,8 +1,7 @@
 
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/chat/provider/chat_provider.dart';
+import 'package:test_case/features/chat/provider/chat_room_providers.dart';
 
 class MessageBar extends ConsumerStatefulWidget {
   final String roomId;

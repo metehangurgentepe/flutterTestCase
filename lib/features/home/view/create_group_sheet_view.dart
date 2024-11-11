@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/chat/provider/chat_provider.dart';
-import 'package:test_case/features/auth/providers/auth_providers.dart';
+import 'package:test_case/features/auth/providers/providers.dart';
+import 'package:test_case/features/home/providers/chat_provider.dart';
 
 class CreateGroupSheet extends ConsumerStatefulWidget {
   const CreateGroupSheet({super.key});
@@ -75,7 +75,7 @@ class _CreateGroupSheetState extends ConsumerState<CreateGroupSheet> {
                   allParticipants.add(currentUser!.id);
                 }
 
-                await ref.read(chatProvider.notifier).createGroupRoom(
+                await ref.read(chatListProvider.notifier).createGroupRoom(
                       _groupNameController.text,
                       allParticipants,
                     );

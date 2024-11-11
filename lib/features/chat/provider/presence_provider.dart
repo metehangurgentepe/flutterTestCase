@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/chat/provider/chat_provider.dart';
+import 'package:test_case/features/chat/provider/chat_room_providers.dart';
 
 final presenceProvider = StreamProvider.family<bool, String>((ref, userId) {
   final presenceService = ref.watch(presenceServiceProvider);

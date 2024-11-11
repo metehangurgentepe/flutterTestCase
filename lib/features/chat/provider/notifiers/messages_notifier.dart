@@ -1,11 +1,10 @@
 import 'dart:async';
-
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test_case/features/chat/model/chat_message_model.dart';
-import 'package:test_case/features/chat/repository/chat_repository.dart';
+import 'package:test_case/features/chat/repository/chat_room_repository.dart';
 
 class MessagesNotifier extends StateNotifier<AsyncValue<List<ChatMessage>>> {
-  final IChatRepository _repository;
+  final IChatRoomRepository _repository;
   final String roomId;
   StreamSubscription<List<ChatMessage>>? _subscription;
 

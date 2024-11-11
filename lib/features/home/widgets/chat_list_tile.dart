@@ -2,11 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
-import 'package:test_case/features/auth/providers/auth_providers.dart';
-import 'package:test_case/features/chat/model/chat_room_model.dart';
+import 'package:test_case/features/auth/providers/providers.dart';
+import 'package:test_case/features/home/models/chat_room_model.dart';
 import 'package:test_case/core/utils/date_formatter.dart';
 import 'package:test_case/features/chat/view/chat_view.dart';
-
 
 class ChatRoomListTile extends ConsumerWidget {
   final ChatRoom room;
@@ -76,22 +75,20 @@ class ChatRoomListTile extends ConsumerWidget {
     );
   }
 
-  Future<UserModel?> _getOtherUser(String currentUserId, SupabaseClient supabase) async {
+  Future<UserModel?> _getOtherUser(
+      String currentUserId, SupabaseClient supabase) async {
     if (room.isGroup) return null;
-    
+
     final otherUserId = room.participants.firstWhere(
       (id) => id != currentUserId,
       orElse: () => '',
     );
-    
+
     if (otherUserId.isEmpty) return null;
 
-    final response = await supabase
-        .from('profiles')
-        .select()
-        .eq('id', otherUserId)
-        .single();
-        
+    final response =
+        await supabase.from('profiles').select().eq('id', otherUserId).single();
+
     return UserModel.fromJson(response);
   }
 }

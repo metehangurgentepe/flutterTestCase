@@ -1,14 +1,15 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/chat/model/chat_room_model.dart';
-import 'package:test_case/features/chat/repository/chat_repository.dart';
+import 'package:test_case/features/home/models/chat_room_model.dart';
+import 'package:test_case/features/home/repository/chat_repository.dart';
 
 class ChatRoomsNotifier extends StateNotifier<AsyncValue<List<ChatRoom>>> {
   final IChatRepository _repository;
   final String userId;
   StreamSubscription? _roomsSubscription;
 
-  ChatRoomsNotifier(this._repository, this.userId) : super(const AsyncValue.loading()) {
+  ChatRoomsNotifier(this._repository, this.userId)
+      : super(const AsyncValue.loading()) {
     _init();
   }
 
@@ -37,7 +38,9 @@ class ChatRoomsNotifier extends StateNotifier<AsyncValue<List<ChatRoom>>> {
 
   Future<void> refreshRooms() async {
     try {
-      final rooms = await _repository.getChatRoomsStream(userId).first; // Changed from getChatRooms to getChatRoomsStream().first
+      final rooms = await _repository
+          .getChatRoomsStream(userId)
+          .first; 
       if (mounted) {
         state = AsyncValue.data(rooms);
       }
@@ -60,7 +63,8 @@ class GroupRoomsNotifier extends StateNotifier<AsyncValue<List<ChatRoom>>> {
   final String userId;
   StreamSubscription<List<ChatRoom>>? _subscription;
 
-  GroupRoomsNotifier(this._repository, this.userId) : super(const AsyncValue.loading()) {
+  GroupRoomsNotifier(this._repository, this.userId)
+      : super(const AsyncValue.loading()) {
     _initializeGroupRooms();
   }
 

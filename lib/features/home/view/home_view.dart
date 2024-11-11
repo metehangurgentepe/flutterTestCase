@@ -1,20 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/auth/providers/auth_providers.dart';
-import 'package:test_case/features/chat/provider/chat_provider.dart';
+import 'package:test_case/features/auth/providers/providers.dart';
+import 'package:test_case/features/auth/view/auth_wrapper.dart';
 import 'package:test_case/features/chat/view/chat_view.dart';
-import 'package:test_case/features/chat/view/create_chat_sheet_view.dart';
-import 'package:test_case/features/chat/view/create_group_sheet_view.dart';
-import 'package:test_case/features/chat/widgets/chat_list_tile.dart';
+import 'package:test_case/features/home/providers/chat_provider.dart';
+import 'package:test_case/features/home/view/create_chat_sheet_view.dart';
+import 'package:test_case/features/home/view/create_group_sheet_view.dart';
+import 'package:test_case/features/home/widgets/chat_list_tile.dart';
 
-class ChatListView extends ConsumerStatefulWidget {
-  const ChatListView({super.key});
+class HomeView extends ConsumerStatefulWidget {
+  const HomeView({super.key});
 
   @override
-  ConsumerState<ChatListView> createState() => _ChatListViewState();
+  ConsumerState<HomeView> createState() => _HomeViewState();
 }
 
-class _ChatListViewState extends ConsumerState<ChatListView> with SingleTickerProviderStateMixin {
+class _HomeViewState extends ConsumerState<HomeView>
+    with SingleTickerProviderStateMixin {
   late final TabController _tabController;
 
   @override
@@ -37,6 +39,7 @@ class _ChatListViewState extends ConsumerState<ChatListView> with SingleTickerPr
     return Scaffold(
       appBar: AppBar(
         title: const Text('Messages'),
+        automaticallyImplyLeading: false,
         actions: [
           IconButton(
             icon: const Icon(Icons.logout),
@@ -64,14 +67,11 @@ class _ChatListViewState extends ConsumerState<ChatListView> with SingleTickerPr
           Expanded(
             child: TabBarView(
               controller: _tabController,
-              // Add this to prevent rebuilding tabs
               physics: const NeverScrollableScrollPhysics(),
               children: [
-                // Wrap personal chats in keep alive
                 _KeepAliveChatList(
                   child: _PersonalChatsList(userId: userId),
                 ),
-                // Wrap group chats in keep alive
                 _KeepAliveChatList(
                   child: _GroupChatsList(userId: userId),
                 ),
@@ -107,6 +107,12 @@ class _ChatListViewState extends ConsumerState<ChatListView> with SingleTickerPr
 
     if (shouldLogout == true && mounted) {
       await ref.read(authStateProvider.notifier).signOut();
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const AuthWrapper()),
+          (route) => false,
+        );
+      }
     }
   }
 
@@ -136,7 +142,8 @@ class _KeepAliveChatList extends StatefulWidget {
   State<_KeepAliveChatList> createState() => _KeepAliveChatListState();
 }
 
-class _KeepAliveChatListState extends State<_KeepAliveChatList> with AutomaticKeepAliveClientMixin {
+class _KeepAliveChatListState extends State<_KeepAliveChatList>
+    with AutomaticKeepAliveClientMixin {
   @override
   Widget build(BuildContext context) {
     super.build(context);
@@ -159,7 +166,7 @@ class _PersonalChatsList extends ConsumerWidget {
     return chatRoomsAsync.when(
       data: (rooms) {
         final personalChats = rooms.where((room) => !room.isGroup).toList();
-        
+
         if (personalChats.isEmpty) {
           return const Center(
             child: Column(
@@ -216,7 +223,8 @@ class _GroupChatsList extends ConsumerWidget {
               children: [
                 Icon(Icons.group_outlined, size: 48, color: Colors.grey),
                 SizedBox(height: 16),
-                Text('No group chats yet', style: TextStyle(color: Colors.grey)),
+                Text('No group chats yet',
+                    style: TextStyle(color: Colors.grey)),
               ],
             ),
           );
