@@ -1,7 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:test_case/core/models/user_presence.dart';
-import 'package:test_case/core/utils/helpers/notification_service.dart';
 import 'package:test_case/core/utils/helpers/presence_service.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/chat/model/chat_message_model.dart';
@@ -12,6 +11,7 @@ import 'package:test_case/features/chat/provider/notifiers/messages_notifier.dar
 import 'package:test_case/features/chat/provider/notifiers/users_notifier.dart';
 import 'package:test_case/features/chat/repository/chat_repository.dart';
 import 'package:test_case/core/providers/supabase_provider.dart';
+import 'package:test_case/features/notifications/service/notification_service.dart';
 
 /// Core Providers
 final supabaseClientProvider = Provider<SupabaseClient>((ref) {
@@ -31,7 +31,7 @@ final presenceServiceProvider = Provider<PresenceService>((ref) {
 
 final notificationServiceProvider = Provider<NotificationService>((ref) {
   final supabase = ref.watch(supabaseClientProvider);
-  return NotificationService(supabase);
+  return NotificationService(supabase, ref);
 });
 
 /// Chat Room Providers

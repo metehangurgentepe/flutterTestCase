@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:test_case/core/errors/chat_exceptions.dart';
 import 'package:test_case/features/chat/model/chat_message_model.dart';
 import 'package:test_case/features/chat/model/chat_room_model.dart';
 import 'package:test_case/features/chat/provider/chat_provider.dart';
+import 'package:test_case/features/chat/provider/presence_provider.dart';
 import 'package:test_case/features/chat/repository/chat_repository.dart';
 import 'package:test_case/features/chat/widgets/chat_header_view.dart';
 import 'package:test_case/features/chat/widgets/message_bar.dart';
@@ -100,8 +102,8 @@ class _ChatRoomViewState extends ConsumerState<ChatRoomView> {
               );
             }
 
-            final userProfileAsync =
-                ref.watch(userProfileProvider(otherUserId));
+            final userProfileAsync = ref.watch(userProfileProvider(otherUserId));
+            final presenceAsync = ref.watch(presenceProvider(otherUserId));
 
             return userProfileAsync.when(
               data: (profile) => ChatHeader(
@@ -109,6 +111,7 @@ class _ChatRoomViewState extends ConsumerState<ChatRoomView> {
                 isGroup: false,
                 avatarUrl: room.imageUrl ?? profile['avatarUrl'],
                 userId: otherUserId,
+                isOnline: presenceAsync.value ?? false,
               ),
               loading: () => const CircularProgressIndicator(),
               error: (error, _) => ChatHeader(

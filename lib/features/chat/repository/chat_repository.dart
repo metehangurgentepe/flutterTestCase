@@ -1,26 +1,9 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:test_case/core/errors/chat_exceptions.dart';
 import 'package:test_case/core/utils/helpers/cache_manager.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/chat/model/chat_message_model.dart';
 import 'package:test_case/features/chat/model/chat_room_model.dart';
-
-class ChatRoomCreationException implements Exception {
-  final String message;
-  final dynamic error;
-  ChatRoomCreationException(this.message, this.error);
-}
-
-class ProfileFetchException implements Exception {
-  final String message;
-  final dynamic error;
-  ProfileFetchException(this.message, this.error);
-}
-
-class MessageSendException implements Exception {
-  final String message;
-  final dynamic error;
-  MessageSendException(this.message, this.error);
-}
 
 abstract class IChatRepository {
   String? get currentUserId;

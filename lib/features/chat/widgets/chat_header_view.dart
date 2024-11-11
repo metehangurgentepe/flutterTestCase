@@ -4,23 +4,25 @@ import 'package:test_case/features/chat/provider/chat_provider.dart';
 
 class ChatHeader extends StatelessWidget {
   final String roomName;
-  final String? avatarUrl;
   final bool isGroup;
+  final String? avatarUrl;
   final String? userId;
+  final bool isOnline;
 
   const ChatHeader({
-    Key? key,
     required this.roomName,
-    this.avatarUrl,
     required this.isGroup,
+    this.avatarUrl,
     this.userId,
-  }) : super(key: key);
+    this.isOnline = false,
+    super.key,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: [
-        _buildAvatar(),
+        _buildAvatar(isOnline),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
@@ -36,8 +38,14 @@ class ChatHeader extends StatelessWidget {
                 ),
                 overflow: TextOverflow.ellipsis,
               ),
-              if (!isGroup && userId != null) 
-                _buildPresenceStatus(),
+              if (!isGroup && userId != null)
+                Text(
+                  isOnline ? 'online' : 'offline',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isOnline ? Colors.green : Colors.grey,
+                  ),
+                ),
             ],
           ),
         ),
@@ -45,7 +53,7 @@ class ChatHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildAvatar() {
+  Widget _buildAvatar(bool isOnline) {
     return Stack(
       children: [
         Container(
@@ -76,26 +84,25 @@ class ChatHeader extends StatelessWidget {
           Positioned(
             right: 0,
             bottom: 0,
-            child: _buildPresenceDot(),
+            child: _buildPresenceDot(isOnline),
           ),
       ],
     );
   }
 
-  Widget _buildPresenceDot() {
+  Widget _buildPresenceDot(bool isOnline) {
     return Consumer(
       builder: (context, ref, child) {
         final presenceAsync = ref.watch(userPresenceProvider(userId!));
         
         return presenceAsync.when(
           data: (presence) {
-            final isOnline = presence.status == 'online';
             return Container(
               width: 12,
               height: 12,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isOnline ? Colors.green : Colors.grey,
+                color: isOnline ? Colors.green : Colors.grey[400],
                 border: Border.all(
                   color: Colors.white,
                   width: 2,
@@ -105,52 +112,6 @@ class ChatHeader extends StatelessWidget {
           },
           loading: () => const SizedBox(width: 12, height: 12),
           error: (_, __) => const SizedBox(width: 12, height: 12),
-        );
-      },
-    );
-  }
-
-  Widget _buildPresenceStatus() {
-    return Consumer(
-      builder: (context, ref, child) {
-        final presenceAsync = ref.watch(userPresenceProvider(userId!));
-        
-        return presenceAsync.when(
-          data: (presence) {
-            if (presence.status == 'online') {
-              return const Text(
-                'Online',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.green,
-                ),
-              );
-            } else if (presence.lastSeen != null) {
-              final difference = DateTime.now().difference(presence.lastSeen!);
-              String lastSeenText;
-              
-              if (difference.inMinutes < 1) {
-                lastSeenText = 'Just now';
-              } else if (difference.inHours < 1) {
-                lastSeenText = '${difference.inMinutes}m ago';
-              } else if (difference.inDays < 1) {
-                lastSeenText = '${difference.inHours}h ago';
-              } else {
-                lastSeenText = '${difference.inDays}d ago';
-              }
-              
-              return Text(
-                'Last seen $lastSeenText',
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey,
-                ),
-              );
-            }
-            return const SizedBox();
-          },
-          loading: () => const SizedBox(),
-          error: (_, __) => const SizedBox(),
         );
       },
     );
