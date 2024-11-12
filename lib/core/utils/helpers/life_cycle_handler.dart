@@ -4,10 +4,11 @@ import 'package:test_case/features/auth/providers/providers.dart';
 import 'package:test_case/features/chat/provider/chat_room_providers.dart';
 import 'package:test_case/features/home/providers/chat_provider.dart';
 import 'package:flutter/material.dart';
-
+import 'package:test_case/core/services/logger_service.dart';
 
 class LifecycleHandler extends WidgetsBindingObserver {
   final Ref _ref;
+  final _logger = LoggerService();
   AppLifecycleState? _previousState;
 
   LifecycleHandler(this._ref) {
@@ -38,7 +39,7 @@ class LifecycleHandler extends WidgetsBindingObserver {
             break;
         }
       } catch (e) {
-        print('Error updating presence in lifecycle: $e');
+        _logger.error('Error updating presence in lifecycle', e);
       }
     }
   }

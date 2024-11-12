@@ -4,9 +4,11 @@ import 'package:injectable/injectable.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:test_case/features/auth/model/auth_failure.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
+import 'package:test_case/core/services/logger_service.dart';
 
 class ProfileRepository {
   final SupabaseClient _supabase;
+  final _logger = LoggerService();
 
   ProfileRepository(this._supabase);
 
@@ -113,8 +115,7 @@ class ProfileRepository {
 
       return right(UserModel.fromJson(response));
     } catch (e, stackTrace) {
-      print('Profile creation error: $e');
-      print('Stack trace: $stackTrace');
+      _logger.error('Profile creation error', e, stackTrace);
       return left(const AuthFailure.serverError());
     }
   }

@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test_case/core/services/auth_service.dart';
+import 'package:test_case/core/services/logger_service.dart';
 import 'package:test_case/features/auth/model/auth_failure.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
 
 class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
   final IAuthService _authService;
+  final _logger = LoggerService();
   StreamSubscription<UserModel?>? _authStateSubscription;
 
   AuthNotifier(this._authService) : super(const AsyncValue.loading()) {
@@ -28,12 +30,12 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
           state = AsyncValue.data(user);
         },
         onError: (error, stack) {
-          print('Auth state error: $error');
+          _logger.error('Auth state error', error, stack);
           state = AsyncValue.error(error, stack);
         },
       );
     } catch (e, stackTrace) {
-      print('Error during auth initialization: $e');
+      _logger.error('Error during auth initialization', e, stackTrace);
       state = AsyncValue.error(e, stackTrace);
     }
   }
@@ -91,11 +93,11 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
 
       // Force state update with current user
       final currentUser = _authService.currentUser;
-      print('SignUp - Setting state with user: ${currentUser?.email}');
+      _logger.info('SignUp successful for user: ${currentUser?.email}');
       state = AsyncValue.data(currentUser);
       return null;
     } catch (e, stackTrace) {
-      print('SignUp error: $e');
+      _logger.error('SignUp error', e, stackTrace);
       final failure = AuthFailure.serverError();
       state = AsyncValue.error(failure, stackTrace);
       return failure;

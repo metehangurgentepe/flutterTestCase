@@ -3,6 +3,7 @@ import 'package:test_case/core/utils/helpers/presence_service.dart';
 import 'package:test_case/core/notifications/service/notification_service.dart';
 import 'package:test_case/features/auth/model/auth_failure.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
+import 'package:test_case/core/services/logger_service.dart';
 
 abstract class IAuthService {
   Future<AuthFailure?> signIn({
@@ -28,6 +29,7 @@ class AuthService implements IAuthService {
   final IAuthRepository _repository;
   final PresenceService _presenceService;
   final NotificationService _notificationService;
+  final _logger = LoggerService();
   UserModel? _currentUser;
 
   AuthService(this._repository, this._presenceService, this._notificationService);
@@ -129,8 +131,8 @@ class AuthService implements IAuthService {
       await _notificationService.initialize();
       await _notificationService.setupToken();
       _notificationService.listenToTokenRefresh();
-    } catch (e) {
-      print('Error initializing services: $e');
+    } catch (e, stack) {
+      _logger.error('Error initializing services', e, stack);
     }
   }
   

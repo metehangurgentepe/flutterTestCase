@@ -1,9 +1,11 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:test_case/core/services/logger_service.dart';
 
 class PresenceService {
   final SupabaseClient _supabase;
   final _channel = 'user_presence';
   RealtimeChannel? _presenceChannel;
+  final _logger = LoggerService();
 
   bool _isInitialized = false;
   bool get isInitialized => _isInitialized;
@@ -35,11 +37,11 @@ class PresenceService {
       final channel = _supabase.channel(_channel);
 
       channel.onPresenceSync((payload) {
-        print('Presence sync: $payload');
+        _logger.info('Presence sync: $payload');
       }).onPresenceJoin((payload) {
-        print('User joined: $payload');
+        _logger.info('User joined: $payload');
       }).onPresenceLeave((payload) {
-        print('User left: $payload');
+        _logger.info('User left: $payload');
       });
 
       final status = await channel.subscribe();
@@ -51,7 +53,8 @@ class PresenceService {
       } else {
         _isInitialized = false;
       }
-    } catch (e) {
+    } catch (e, stack) {
+      _logger.error('Error initializing presence', e, stack);
       _isInitialized = false;
     }
   }
@@ -106,8 +109,8 @@ class PresenceService {
 
         await Future.delayed(const Duration(milliseconds: 100));
       }
-    } catch (e) {
-      print('Error cleaning up old presence: $e');
+    } catch (e, stack) {
+      _logger.error('Error cleaning up old presence', e, stack);
     }
   }
 
@@ -192,8 +195,8 @@ class PresenceService {
       await _presenceChannel?.unsubscribe();
       _presenceChannel = null;
       _isInitialized = false;
-    } catch (e) {
-      print('Error disposing presence service: $e');
+    } catch (e, stack) {
+      _logger.error('Error disposing presence service', e, stack);
     }
   }
 }
