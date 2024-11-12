@@ -4,12 +4,13 @@ import 'package:test_case/core/errors/chat_exceptions.dart';
 import 'package:test_case/features/chat/model/chat_message_model.dart';
 import 'package:test_case/features/chat/provider/chat_room_providers.dart';
 import 'package:test_case/features/home/models/chat_room_model.dart';
-import 'package:test_case/features/home/providers/chat_provider.dart';
+// import 'package:test_case/features/home/providers/chat_provider.dart';
 import 'package:test_case/features/chat/provider/presence_provider.dart';
 import 'package:test_case/features/chat/widgets/chat_header_view.dart';
 import 'package:test_case/features/chat/widgets/message_bar.dart';
 import 'package:test_case/features/chat/widgets/message_bubble.dart';
-import 'package:test_case/core/widgets/error_view.dart'; // Add this import
+import 'package:test_case/core/widgets/error_view.dart';
+import 'package:test_case/features/home/providers/chat_provider.dart'; // Add this import
 
 class ChatRoomView extends ConsumerStatefulWidget {
   final String roomId;
@@ -128,10 +129,10 @@ class _ChatRoomViewState extends ConsumerState<ChatRoomView> {
             final presenceAsync = ref.watch(presenceProvider(otherUserId));
 
             return userProfileAsync.when(
-              data: (profile) => ChatHeader(
-                roomName: room.name ?? profile['displayName'],
+              data: (user) => ChatHeader(
+                roomName: room.name ?? user?.username ?? 'Unknown User',
                 isGroup: false,
-                avatarUrl: room.imageUrl ?? profile['avatarUrl'],
+                avatarUrl: room.imageUrl ?? user?.avatarUrl,
                 userId: otherUserId,
                 isOnline: presenceAsync.value ?? false,
               ),
@@ -211,15 +212,17 @@ class MessageBubbleBuilder extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUserId = ref.read(supabaseClientProvider).auth.currentUser?.id;
     final isCurrentUser = message.senderId == currentUserId;
-    final userProfileAsync = ref.watch(userProfileProvider(message.senderId));
+    
+    // Düzeltilmiş provider çağrısı
+    final userData = ref.watch(userProfileProvider(message.senderId));
 
-    return userProfileAsync.when(
-      data: (userData) => MessageBubble(
+    return userData.when(
+      data: (user) => MessageBubble(
         key: ValueKey(message.id),
         message: message,
         isCurrentUser: isCurrentUser,
-        senderName: userData['displayName'] ?? 'Unknown User',
-        avatarUrl: userData['avatarUrl'],
+        senderName: user?.username ?? 'Unknown User',
+        avatarUrl: user?.avatarUrl,
       ),
       loading: () => const MessageBubbleShimmer(),
       error: (error, _) {

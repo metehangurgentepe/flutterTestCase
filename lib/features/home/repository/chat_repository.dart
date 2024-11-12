@@ -165,14 +165,15 @@ class ChatRepository implements IChatRepository {
         .stream(primaryKey: ['id'])
         .eq('is_group', true)
         .order('created_at', ascending: false)
-        .map((data) async {
+        .map((data) {
           final List<ChatRoom> rooms = [];
 
           for (final json in data) {
             try {
               rooms.add(ChatRoom(
                 id: json['id'],
-                name: json['name'],
+                // Direkt olarak json'dan gelen name'i kullan, null değilse
+                name: json['name'] ?? 'Unnamed Group',
                 isGroup: true,
                 lastMessage: json['last_message'],
                 lastMessageTime: json['last_message_time'] != null
@@ -183,15 +184,10 @@ class ChatRepository implements IChatRepository {
                 participants: List<String>.from(json['participants']),
               ));
             } catch (e) {
-              throw MessageSendException('Failed to fetch group rooms', e);
+              print('Error processing group room: $e');
             }
           }
 
-          return rooms;
-        })
-        .asyncMap((futureRooms) async {
-          final rooms = await futureRooms;
-          _cache.set(cacheKey, rooms);
           return rooms;
         });
   }

@@ -35,3 +35,15 @@ final supabaseClientProvider = Provider<SupabaseClient>((ref) {
 final chatListProvider = StateNotifierProvider<HomeNotifier, AsyncValue<void>>((ref) {
   return HomeNotifier(ref.watch(chatRepositoryProvider));
 });
+
+final userProfileProvider = FutureProvider.family<UserModel?, String>((ref, userId) async {
+  if (userId.isEmpty) return null;
+  final repository = ref.watch(chatRepositoryProvider);
+  try {
+    final profile = await repository.getUserProfile(userId);
+    return UserModel.fromJson(profile);
+  } catch (e) {
+    print('Error fetching user profile: $e');
+    return null;
+  }
+});

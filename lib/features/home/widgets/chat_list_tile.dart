@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/auth/providers/providers.dart';
 import 'package:test_case/features/home/models/chat_room_model.dart';
 import 'package:test_case/core/utils/date_formatter.dart';
 import 'package:test_case/features/chat/view/chat_view.dart';
+import 'package:test_case/features/home/providers/chat_provider.dart';
 
 class ChatRoomListTile extends ConsumerWidget {
   final ChatRoom room;
@@ -20,75 +19,79 @@ class ChatRoomListTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUser = ref.watch(authStateProvider).value;
-    final supabase = Supabase.instance.client;
+    
+    if (room.isGroup) {
+      return _buildGroupTile(context);
+    }
 
-    return FutureBuilder<UserModel?>(
-      future: _getOtherUser(currentUser?.id ?? '', supabase),
-      builder: (context, snapshot) {
-        final otherUser = snapshot.data;
+    final otherUserId = room.participants
+        .firstWhere((id) => id != currentUser?.id, orElse: () => '');
+    
+    final otherUserAsync = ref.watch(userProfileProvider(otherUserId));
 
-        return ListTile(
-          leading: CircleAvatar(
-            backgroundImage: otherUser?.avatarUrl != null
-                ? NetworkImage(otherUser!.avatarUrl!)
-                : null,
-            child: otherUser?.avatarUrl == null
-                ? Text(otherUser?.username[0].toUpperCase() ?? '?')
-                : null,
-          ),
-          title: Text(
-            room.isGroup
-                ? room.name ?? 'Unnamed Group'
-                : otherUser?.username ?? 'Unknown User',
-          ),
-          subtitle: room.lastMessage != null
-              ? Text(
-                  room.lastMessage!,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                )
+    return otherUserAsync.when(
+      data: (otherUser) => ListTile(
+        leading: CircleAvatar(
+          backgroundImage: otherUser?.avatarUrl != null
+              ? NetworkImage(otherUser!.avatarUrl!)
               : null,
-          trailing: room.lastMessageTime != null
-              ? Text(
-                  DateFormatter.formatChatDateTime(room.lastMessageTime!),
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 12,
-                  ),
-                )
+          child: otherUser?.avatarUrl == null
+              ? Text(otherUser?.username[0].toUpperCase() ?? '?')
               : null,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => ChatRoomView(
-                  roomId: room.id ?? '',
-                  roomName: room.isGroup
-                      ? room.name ?? 'Unnamed Group'
-                      : otherUser?.username ?? 'Unknown User',
-                ),
-              ),
-            );
-          },
-        );
-      },
+        ),
+        title: Text(otherUser?.username ?? 'Unknown User'),
+        subtitle: _buildSubtitle(),
+        trailing: _buildTrailing(),
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatRoomView(
+              roomId: room.id ?? '',
+              roomName: otherUser?.username ?? 'Unknown User',
+            ),
+          ),
+        ),
+      ),
+      loading: () => const ListTile(
+        leading: CircleAvatar(child: CircularProgressIndicator()),
+        title: Text('Loading...'),
+      ),
+      error: (_, __) => const ListTile(
+        leading: CircleAvatar(child: Icon(Icons.error)),
+        title: Text('Error loading user'),
+      ),
     );
   }
 
-  Future<UserModel?> _getOtherUser(
-      String currentUserId, SupabaseClient supabase) async {
-    if (room.isGroup) return null;
-
-    final otherUserId = room.participants.firstWhere(
-      (id) => id != currentUserId,
-      orElse: () => '',
+  Widget _buildGroupTile(BuildContext context) {
+    return ListTile(
+      leading: const CircleAvatar(child: Icon(Icons.group)),
+      title: Text(room.name ?? 'Unnamed Group'),
+      subtitle: _buildSubtitle(),
+      trailing: _buildTrailing(),
+      onTap: onTap,
     );
+  }
 
-    if (otherUserId.isEmpty) return null;
+  Widget? _buildSubtitle() {
+    if (room.lastMessage == null) return null;
+    
+    return Text(
+      room.lastMessage!,
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
 
-    final response =
-        await supabase.from('profiles').select().eq('id', otherUserId).single();
-
-    return UserModel.fromJson(response);
+  Widget? _buildTrailing() {
+    if (room.lastMessageTime == null) return null;
+    
+    return Text(
+      DateFormatter.formatChatDateTime(room.lastMessageTime!),
+      style: const TextStyle(
+        color: Colors.grey,
+        fontSize: 12,
+      ),
+    );
   }
 }
