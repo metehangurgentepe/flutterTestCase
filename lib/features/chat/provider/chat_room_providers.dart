@@ -4,18 +4,12 @@ import 'package:test_case/core/providers/supabase_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:test_case/core/services/chat_room_service.dart';
 import 'package:test_case/core/utils/helpers/presence_service.dart';
-import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/chat/model/chat_message_model.dart';
 import 'package:test_case/features/chat/provider/notifiers/chat_notifier.dart';
 import 'package:test_case/features/chat/provider/notifiers/messages_notifier.dart';
 import 'package:test_case/features/chat/repository/chat_room_repository.dart';
 import 'package:test_case/features/home/models/chat_room_model.dart';
 import 'package:test_case/features/home/providers/chat_provider.dart';
-
-// final userProfileProvider = FutureProvider.family<Map<String, dynamic>, String>((ref, userId) async {
-//   final chatRoomService = ref.watch(chatRoomServiceProvider);
-//   return await chatRoomService.getUserProfile(userId);
-// });
 
 final messagesProvider = StateNotifierProvider.family<MessagesNotifier,
     AsyncValue<List<ChatMessage>>, String>((ref, roomId) {

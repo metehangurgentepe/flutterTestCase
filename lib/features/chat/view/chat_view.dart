@@ -213,7 +213,6 @@ class MessageBubbleBuilder extends ConsumerWidget {
     final currentUserId = ref.read(supabaseClientProvider).auth.currentUser?.id;
     final isCurrentUser = message.senderId == currentUserId;
     
-    // Düzeltilmiş provider çağrısı
     final userData = ref.watch(userProfileProvider(message.senderId));
 
     return userData.when(
@@ -238,15 +237,51 @@ class MessageBubbleBuilder extends ConsumerWidget {
   }
 }
 
-// Add this new widget
 class MessageBubbleShimmer extends StatelessWidget {
   const MessageBubbleShimmer({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      // Add shimmer effect implementation
-      // ...
+      margin: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 8.0),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.grey[300],
+              shape: BoxShape.circle,
+            ),
+          ),
+          const SizedBox(width: 8),
+          // Message content shimmer
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 100,
+                  height: 16,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Container(
+                  width: 200,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

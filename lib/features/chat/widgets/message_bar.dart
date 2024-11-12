@@ -7,10 +7,10 @@ class MessageBar extends ConsumerStatefulWidget {
   final Function(Object error)? onError;
 
   const MessageBar({
-    Key? key,
+    super.key,
     required this.roomId,
     this.onError,
-  }) : super(key: key);
+  });
 
   @override
   ConsumerState<MessageBar> createState() => _MessageBarState();
