@@ -14,6 +14,15 @@ class AuthWrapper extends ConsumerStatefulWidget {
 
 class _AuthWrapperState extends ConsumerState<AuthWrapper> {
   final _logger = LoggerService();
+
+  @override
+  void initState() {
+    super.initState();
+    // Check auth status when widget initializes
+    Future.microtask(() {
+      ref.read(authStateProvider.notifier).checkAuthStatus();
+    });
+  }
   
   @override
   Widget build(BuildContext context) {

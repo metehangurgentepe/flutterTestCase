@@ -131,4 +131,13 @@ class AuthNotifier extends StateNotifier<AsyncValue<UserModel?>> {
   void resetState() {
     state = const AsyncValue.data(null);
   }
+
+  Future<void> checkAuthStatus() async {
+    state = const AsyncValue.loading();
+    final result = await _authService.checkAuthStatus();
+    state = result.fold(
+      (failure) => const AsyncValue.data(null),
+      (user) => AsyncValue.data(user),
+    );
+  }
 }

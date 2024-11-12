@@ -1,3 +1,4 @@
+import 'package:fpdart/fpdart.dart';
 import 'package:test_case/features/auth/repository/auth_repository.dart';
 import 'package:test_case/core/utils/helpers/presence_service.dart';
 import 'package:test_case/core/notifications/service/notification_service.dart';
@@ -23,6 +24,8 @@ abstract class IAuthService {
   UserModel? get currentUser;
   
   Stream<UserModel?> authStateChanges();
+
+  Future<Either<AuthFailure, UserModel>> checkAuthStatus();
 }
 
 class AuthService implements IAuthService {
@@ -147,5 +150,10 @@ class AuthService implements IAuthService {
         },
       ),
     );
+  }
+
+  @override
+  Future<Either<AuthFailure, UserModel>> checkAuthStatus() async {
+    return await _repository.checkAuthStatus();
   }
 }

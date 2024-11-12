@@ -89,15 +89,29 @@ class AuthRepository implements IAuthRepository {
     required UserRole role,
   }) async {
     try {
+      // Check if email exists
       try {
-        final existingUserQuery = await _supabase
+        final existingEmailQuery = await _supabase
             .from('profiles')
             .select()
             .eq('email', email)
             .maybeSingle();
 
-        if (existingUserQuery != null) {
+        if (existingEmailQuery != null) {
           return left(const AuthFailure.emailAlreadyInUse());
+        }
+      } catch (e) {}
+
+      // Check if username exists
+      try {
+        final existingUsernameQuery = await _supabase
+            .from('profiles')
+            .select()
+            .eq('username', username)
+            .maybeSingle();
+
+        if (existingUsernameQuery != null) {
+          return left(const AuthFailure.usernameAlreadyInUse());
         }
       } catch (e) {}
 
