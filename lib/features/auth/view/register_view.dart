@@ -6,6 +6,8 @@ import 'package:test_case/features/auth/providers/providers.dart';
 import 'package:test_case/features/auth/widgets/auth_button.dart';
 import 'package:test_case/features/auth/widgets/auth_text_field.dart';
 import 'package:test_case/features/home/view/home_view.dart';
+import 'package:test_case/features/auth/utils/auth_error_handler.dart';
+import 'package:test_case/features/auth/utils/auth_form_validator.dart';
 
 class RegisterView extends ConsumerStatefulWidget {
   const RegisterView({super.key});
@@ -22,42 +24,30 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
   bool _isAdmin = false;
 
   Future<void> _handleSubmit() async {
-    if (_formKey.currentState?.validate() ?? false) {
-      try {
-        final failure = await ref.read(authStateProvider.notifier).signUp(
-              email: _emailController.text.trim(),
-              password: _passwordController.text,
-              username: _usernameController.text.trim(),
-              role: _isAdmin ? UserRole.admin : UserRole.user,
-            );
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    
+    try {
+      final failure = await ref.read(authStateProvider.notifier).signUp(
+            email: _emailController.text.trim(),
+            password: _passwordController.text,
+            username: _usernameController.text.trim(),
+            role: _isAdmin ? UserRole.admin : UserRole.user,
+          );
 
-        if (mounted && failure != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(failure.toErrorMessage()),
-              backgroundColor: Colors.red,
-            ),
-          );
-          return;
-        }
+      if (mounted && failure != null) {
+        AuthErrorHandler.showError(context, failure);
+        return;
+      }
 
-        // Force navigation after successful registration
-        if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const HomeView()),
-            (route) => false,
-          );
-        }
-      } catch (e) {
-        print('Registration error: $e');
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('An error occurred during registration'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomeView()),
+          (route) => false,
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        AuthErrorHandler.showError(context, const AuthFailure.serverError());
       }
     }
   }
@@ -81,45 +71,21 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
                 AuthTextField(
                   controller: _usernameController,
                   labelText: 'Username',
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a username';
-                    }
-                    if (value.length < 3) {
-                      return 'Username must be at least 3 characters';
-                    }
-                    return null;
-                  },
+                  validator: AuthFormValidator.validateUsername,
                 ),
                 const SizedBox(height: 16),
                 AuthTextField(
                   controller: _emailController,
                   labelText: 'Email',
                   keyboardType: TextInputType.emailAddress,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your email';
-                    }
-                    if (!value.contains('@')) {
-                      return 'Please enter a valid email';
-                    }
-                    return null;
-                  },
+                  validator: AuthFormValidator.validateEmail,
                 ),
                 const SizedBox(height: 16),
                 AuthTextField(
                   controller: _passwordController,
                   labelText: 'Password',
                   isPassword: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter a password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
+                  validator: AuthFormValidator.validatePassword,
                 ),
                 const SizedBox(height: 24),
                 SwitchListTile(

@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/auth/model/auth_failure.dart';
 import 'package:test_case/features/auth/providers/providers.dart';
+import 'package:test_case/features/auth/utils/auth_error_handler.dart';
 import 'package:test_case/features/auth/view/register_view.dart';
 import 'package:test_case/features/auth/widgets/auth_button.dart';
 import 'package:test_case/features/auth/widgets/auth_text_field.dart';
+import 'package:test_case/features/auth/utils/auth_form_validator.dart';
 
 class LoginView extends ConsumerStatefulWidget {
   const LoginView({super.key});
@@ -19,11 +20,15 @@ class _LoginViewState extends ConsumerState<LoginView> {
   final _passwordController = TextEditingController();
 
   Future<void> _handleSubmit() async {
-    if (_formKey.currentState?.validate() ?? false) {
-      await ref.read(authStateProvider.notifier).signIn(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-          );
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    
+    final result = await ref.read(authStateProvider.notifier).signIn(
+          email: _emailController.text.trim(),
+          password: _passwordController.text,
+        );
+        
+    if (mounted && result != null) {
+      AuthErrorHandler.showError(context, result);
     }
   }
 
@@ -47,26 +52,18 @@ class _LoginViewState extends ConsumerState<LoginView> {
         loading: () => const Center(
           child: CircularProgressIndicator(),
         ),
-        error: (error, _) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (mounted) {
-              final message = error is AuthFailure 
-                  ? error.toErrorMessage() 
-                  : 'An unexpected error occurred';
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(message),
-                  backgroundColor: Theme.of(context).colorScheme.error,
-                ),
-              );
-            }
-          });
-          
-          return _buildLoginForm();
-        },
+        error: (error, _) => _handleError(error),
       ),
     );
+  }
+
+  Widget _handleError(dynamic error) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        AuthErrorHandler.showError(context, error);
+      }
+    });
+    return _buildLoginForm();
   }
 
   Widget _buildLoginForm() {
@@ -81,30 +78,14 @@ class _LoginViewState extends ConsumerState<LoginView> {
               controller: _emailController,
               labelText: 'Email',
               keyboardType: TextInputType.emailAddress,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your email';
-                }
-                if (!value.contains('@')) {
-                  return 'Please enter a valid email';
-                }
-                return null;
-              },
+              validator: AuthFormValidator.validateEmail,
             ),
             const SizedBox(height: 16),
             AuthTextField(
               controller: _passwordController,
               labelText: 'Password',
               isPassword: true,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Please enter your password';
-                }
-                if (value.length < 6) {
-                  return 'Password must be at least 6 characters';
-                }
-                return null;
-              },
+              validator: AuthFormValidator.validatePassword,
             ),
             const SizedBox(height: 24),
             AuthButton(
