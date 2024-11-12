@@ -1,9 +1,8 @@
-
-
 import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:test_case/features/auth/providers/auth_providers.dart';
-import 'package:test_case/features/chat/provider/chat_provider.dart';
+import 'package:test_case/features/auth/providers/providers.dart';
+import 'package:test_case/features/chat/provider/chat_room_providers.dart';
+import 'package:test_case/features/home/providers/chat_provider.dart';
 import 'package:flutter/material.dart';
 
 
@@ -13,12 +12,10 @@ class LifecycleHandler extends WidgetsBindingObserver {
 
   LifecycleHandler(this._ref) {
     WidgetsBinding.instance.addObserver(this);
-    // Initialize with online status
     _updatePresence(AppLifecycleState.resumed);
   }
 
   Future<void> _updatePresence(AppLifecycleState state) async {
-    // Avoid duplicate updates
     if (state == _previousState) return;
     _previousState = state;
 

@@ -2,6 +2,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:test_case/core/errors/chat_exceptions.dart';
 import 'package:test_case/core/utils/helpers/cache_manager.dart';
 import 'package:test_case/features/chat/model/chat_message_model.dart';
+import 'package:test_case/features/home/models/chat_room_model.dart';
 
 abstract class IChatRoomRepository {
   String? get currentUserId;
@@ -9,6 +10,8 @@ abstract class IChatRoomRepository {
   Future<void> sendMessage(ChatMessage message);
   Future<void> markAsRead(String messageId);
   Future<Map<String, dynamic>> getUserProfile(String userId);
+  Stream<List<ChatRoom>> getChatRooms(String userId);
+  
 }
 
 class ChatRoomRepository implements IChatRoomRepository {
@@ -72,6 +75,84 @@ class ChatRoomRepository implements IChatRoomRepository {
               data.map((json) => ChatMessage.fromJson(json)).toList();
           _cache.set('messages_$roomId', messages);
           return messages;
+        });
+  }
+
+  Future<Map<String, dynamic>> _getUserProfile(String userId) async {
+    final cacheKey = 'profile_$userId';
+
+    try {
+      if (_cache.hasValid(cacheKey)) {
+        return _cache.get<Map<String, dynamic>>(cacheKey)!;
+      }
+
+      final profile =
+          await _supabase.from('profiles').select().eq('id', userId).single();
+
+      _cache.set(cacheKey, profile);
+      return profile;
+    } catch (e) {
+      throw ProfileFetchException('Failed to fetch user profile', e);
+    }
+  }
+
+  @override
+  Stream<List<ChatRoom>> getChatRooms(String userId) {
+    final cacheKey = 'rooms_$userId';
+
+    if (_cache.hasValid(cacheKey)) {
+      return Stream.value(_cache.get<List<ChatRoom>>(cacheKey)!);
+    }
+
+    return _supabase
+        .from('chat_rooms')
+        .stream(primaryKey: ['id'])
+        .eq('is_group', false)
+        .order('created_at', ascending: false)
+        .asyncMap((data) async {
+          final List<ChatRoom> rooms = [];
+          final List<Future<void>> profileFutures = [];
+          final List<String> errorMessages = [];
+
+          for (final json in data) {
+            try {
+              final otherUserId = (json['participants'] as List)
+                  .cast<String>()
+                  .firstWhere((id) => id != userId);
+
+              profileFutures
+                  .add(_getUserProfile(otherUserId).then((otherUserProfile) {
+                rooms.add(ChatRoom(
+                  id: json['id'],
+                  name: otherUserProfile['username'],
+                  isGroup: false,
+                  lastMessage: json['last_message'],
+                  lastMessageTime: json['last_message_time'] != null
+                      ? DateTime.parse(json['last_message_time'])
+                      : null,
+                  imageUrl: otherUserProfile['avatar_url'],
+                  createdAt: DateTime.parse(json['created_at']),
+                  participants: List<String>.from(json['participants']),
+                ));
+              }).catchError((e) {
+                errorMessages
+                    .add('Failed to fetch profile for user $otherUserId: $e');
+              }));
+            } catch (e) {
+              errorMessages.add('Error processing chat room data: $e');
+            }
+          }
+
+          await Future.wait(profileFutures);
+
+          if (errorMessages.isNotEmpty) {
+            errorMessages.forEach(print);
+          }
+
+          rooms.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+
+          _cache.set(cacheKey, rooms);
+          return rooms;
         });
   }
 

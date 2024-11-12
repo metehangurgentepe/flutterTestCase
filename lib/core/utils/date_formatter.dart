@@ -1,8 +1,5 @@
-
-
 import 'package:intl/intl.dart';
 
-// ... rest of DateFormatter class ...
 class DateFormatter {
   static String formatChatDateTime(DateTime dateTime) {
     final now = DateTime.now();

@@ -46,11 +46,13 @@ dependencies:
   fpdart: ^1.1.0
   riverpod_annotation: ^2.6.1
   flutter_local_notifications: ^17.2.2
-  mockito: ^5.4.4
+  mockito: ^5.0.0
   firebase_core: ^3.6.0
   firebase_messaging: ^15.1.0
   firebase_analytics: ^11.3.4
   logger: ^1.0.0
+  injectable: ^2.5.0
+  postgrest: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -59,6 +61,9 @@ dev_dependencies:
   freezed: ^2.4.6
   json_serializable: ^6.8.0
   mocktail: ^1.0.0
+  get_it: ^8.0.2
+  firebase_core_platform_interface: ^5.3.0
+  plugin_platform_interface: ^2.1.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
