@@ -17,31 +17,50 @@ class MessageBar extends ConsumerStatefulWidget {
 }
 
 class _MessageBarState extends ConsumerState<MessageBar> {
-  final TextEditingController _controller = TextEditingController();
+  late final TextEditingController _controller;
   bool _isSending = false;
 
-  Future<void> _sendMessage() async {
-    final content = _controller.text.trim();
-    if (content.isEmpty || _isSending) return;
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
 
-    setState(() {
-      _isSending = true;
-    });
+  Future<void> _sendMessage() async {
+    if (!_validateMessage()) return;
+
+    await _performSend();
+  }
+
+  bool _validateMessage() {
+    final content = _controller.text.trim();
+    return content.isNotEmpty && !_isSending;
+  }
+
+  Future<void> _performSend() async {
+    setState(() => _isSending = true);
 
     try {
-      await ref.read(messagesProvider(widget.roomId).notifier).sendMessage(content);
+      await ref
+          .read(messagesProvider(widget.roomId).notifier)
+          .sendMessage(_controller.text.trim());
       _controller.clear();
     } catch (e) {
-      if (mounted) {
-        widget.onError?.call(e);
-      }
+      if (mounted) widget.onError?.call(e);
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSending = false;
-        });
-      }
+      if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: _MessageInputBar(
+        controller: _controller,
+        isSending: _isSending,
+        onSend: _sendMessage,
+      ),
+    );
   }
 
   @override
@@ -49,46 +68,67 @@ class _MessageBarState extends ConsumerState<MessageBar> {
     _controller.dispose();
     super.dispose();
   }
+}
+
+class _MessageInputBar extends StatelessWidget {
+  final TextEditingController controller;
+  final bool isSending;
+  final VoidCallback onSend;
+
+  const _MessageInputBar({
+    required this.controller,
+    required this.isSending,
+    required this.onSend,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          border: Border(
-            top: BorderSide(
-              color: Theme.of(context).dividerColor,
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      decoration: BoxDecoration(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: controller,
+              decoration: const InputDecoration(
+                hintText: 'Type a message',
+                border: InputBorder.none,
+              ),
+              onSubmitted: (_) => onSend(),
+              enabled: !isSending,
             ),
           ),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                decoration: const InputDecoration(
-                  hintText: 'Type a message',
-                  border: InputBorder.none,
-                ),
-                onSubmitted: (_) => _sendMessage(),
-                enabled: !_isSending,
-              ),
-            ),
-            IconButton(
-              icon: _isSending 
-                ? const SizedBox(
-                    width: 24,
-                    height: 24,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.send),
-              onPressed: _isSending ? null : _sendMessage,
-            ),
-          ],
-        ),
+          _SendButton(
+            isSending: isSending,
+            onPressed: onSend,
+          ),
+        ],
       ),
+    );
+  }
+}
+
+class _SendButton extends StatelessWidget {
+  final bool isSending;
+  final VoidCallback onPressed;
+
+  const _SendButton({required this.isSending, required this.onPressed});
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: isSending
+          ? const SizedBox(
+              width: 24,
+              height: 24,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.send),
+      onPressed: isSending ? null : onPressed,
     );
   }
 }

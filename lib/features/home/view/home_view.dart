@@ -37,49 +37,41 @@ class _HomeViewState extends ConsumerState<HomeView>
     final userId = currentUser?.id ?? '';
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Messages'),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () => _showLogoutDialog(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.group_add),
-            onPressed: () => _showCreateGroupSheet(context),
-          ),
-          IconButton(
-            icon: const Icon(Icons.person_add),
-            onPressed: () => _showCreateChatSheet(context),
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          TabBar(
+      appBar: _buildAppBar(context),
+      body: _buildBody(userId),
+    );
+  }
+
+  PreferredSizeWidget _buildAppBar(BuildContext context) {
+    return AppBar(
+      title: const Text('Messages'),
+      automaticallyImplyLeading: false,
+      actions: [
+        _LogoutButton(onPressed: () => _showLogoutDialog(context)),
+        _CreateGroupButton(onPressed: () => _showCreateGroupSheet(context)),
+        _CreateChatButton(onPressed: () => _showCreateChatSheet(context)),
+      ],
+    );
+  }
+
+  Widget _buildBody(String userId) {
+    return Column(
+      children: [
+        TabBar(
+          controller: _tabController,
+          tabs: const [Tab(text: 'Chats'), Tab(text: 'Groups')],
+        ),
+        Expanded(
+          child: TabBarView(
             controller: _tabController,
-            tabs: const [
-              Tab(text: 'Chats'),
-              Tab(text: 'Groups'),
+            physics: const NeverScrollableScrollPhysics(),
+            children: [
+              _KeepAliveChatList(child: _PersonalChatsList(userId: userId)),
+              _KeepAliveChatList(child: _GroupChatsList(userId: userId)),
             ],
           ),
-          Expanded(
-            child: TabBarView(
-              controller: _tabController,
-              physics: const NeverScrollableScrollPhysics(),
-              children: [
-                _KeepAliveChatList(
-                  child: _PersonalChatsList(userId: userId),
-                ),
-                _KeepAliveChatList(
-                  child: _GroupChatsList(userId: userId),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -129,6 +121,48 @@ class _HomeViewState extends ConsumerState<HomeView>
       context: context,
       isScrollControlled: true,
       builder: (context) => const CreateChatSheet(),
+    );
+  }
+}
+
+class _LogoutButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  
+  const _LogoutButton({required this.onPressed});
+  
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.logout),
+      onPressed: onPressed,
+    );
+  }
+}
+
+class _CreateGroupButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  
+  const _CreateGroupButton({required this.onPressed});
+  
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.group_add),
+      onPressed: onPressed,
+    );
+  }
+}
+
+class _CreateChatButton extends StatelessWidget {
+  final VoidCallback onPressed;
+  
+  const _CreateChatButton({required this.onPressed});
+  
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      icon: const Icon(Icons.person_add),
+      onPressed: onPressed,
     );
   }
 }

@@ -18,27 +18,29 @@ class ChatRepository implements IChatRepository {
   final CacheManager _cache;
   final Map<String, RealtimeChannel> _channels = {};
 
+  ChatRepository(this._supabase) : _cache = CacheManager();
+
   @override
   String? get currentUserId => _supabase.auth.currentUser?.id;
 
-  ChatRepository(this._supabase) : _cache = CacheManager();
-
-  Future<Map<String, dynamic>> _getUserProfile(String userId) async {
-    final cacheKey = 'profile_$userId';
-
-    try {
-      if (_cache.hasValid(cacheKey)) {
-        return _cache.get<Map<String, dynamic>>(cacheKey)!;
-      }
-
-      final profile =
-          await _supabase.from('profiles').select().eq('id', userId).single();
-
-      _cache.set(cacheKey, profile);
+  // Extract profile fetching logic to a separate method
+  @override
+  Future<Map<String, dynamic>> getUserProfile(String userId) async {
+    return await _withCache('profile_$userId', () async {
+      final profile = await _supabase.from('profiles').select().eq('id', userId).single();
       return profile;
-    } catch (e) {
-      throw ProfileFetchException('Failed to fetch user profile', e);
+    });
+  }
+
+  // Generic cache wrapper
+  Future<T> _withCache<T>(String key, Future<T> Function() fetchData) async {
+    if (_cache.hasValid(key)) {
+      return _cache.get<T>(key)!;
     }
+
+    final data = await fetchData();
+    _cache.set(key, data);
+    return data;
   }
 
   @override
@@ -47,45 +49,46 @@ class ChatRepository implements IChatRepository {
         .from('chat_rooms')
         .stream(primaryKey: ['id'])
         .order('last_message_time', ascending: false)
-        .map((data) => data.map((room) => ChatRoom.fromJson(room)).toList());
+        .map(_mapToChatRooms);
+  }
+
+  List<ChatRoom> _mapToChatRooms(List<Map<String, dynamic>> data) {
+    return data.map((room) => ChatRoom.fromJson(room)).toList();
   }
 
   @override
   Future<ChatRoom> createChatRoom(ChatRoom room) async {
     try {
       if (!room.isGroup && room.participants.length == 2) {
-        final existingRoom = await findExistingChatRoom(
-            room.participants[0], room.participants[1]);
-
-        if (existingRoom != null) {
-          return existingRoom;
-        }
+        final existingRoom = await _findExistingPersonalChat(room.participants);
+        if (existingRoom != null) return existingRoom;
       }
 
-      final roomData = {
-        'name': room.name,
-        'is_group': room.isGroup,
-        'participants': room.participants,
-        'created_at': DateTime.now().toIso8601String(),
-        'last_message': null,
-        'last_message_time': null,
-        'image_url': room.imageUrl,
-      };
-
-      final response =
-          await _supabase.from('chat_rooms').insert(roomData).select().single();
-
-      for (final userId in room.participants) {
-        if (room.isGroup) {
-          _cache.remove('group_rooms_$userId');
-        } else {
-          _cache.remove('rooms_$userId');
-        }
-      }
+      final roomData = _prepareChatRoomData(room);
+      final response = await _supabase.from('chat_rooms').insert(roomData).select().single();
+      _invalidateRoomCaches(room);
 
       return ChatRoom.fromJson(response);
     } catch (e) {
       throw ChatRoomCreationException('Failed to create chat room', e);
+    }
+  }
+
+  Map<String, dynamic> _prepareChatRoomData(ChatRoom room) {
+    return {
+      'name': room.name,
+      'is_group': room.isGroup,
+      'participants': room.participants,
+      'created_at': DateTime.now().toIso8601String(),
+      'last_message': null,
+      'last_message_time': null,
+      'image_url': room.imageUrl,
+    };
+  }
+
+  void _invalidateRoomCaches(ChatRoom room) {
+    for (final userId in room.participants) {
+      _cache.remove(room.isGroup ? 'group_rooms_$userId' : 'rooms_$userId');
     }
   }
 
@@ -114,7 +117,7 @@ class ChatRepository implements IChatRepository {
                   .firstWhere((id) => id != userId);
 
               profileFutures
-                  .add(_getUserProfile(otherUserId).then((otherUserProfile) {
+                  .add(getUserProfile(otherUserId).then((otherUserProfile) {
                 rooms.add(ChatRoom(
                   id: json['id'],
                   name: otherUserProfile['username'],
@@ -193,13 +196,13 @@ class ChatRepository implements IChatRepository {
         });
   }
 
-  Future<ChatRoom?> findExistingChatRoom(String user1Id, String user2Id) async {
+  Future<ChatRoom?> _findExistingPersonalChat(List<String> participants) async {
     try {
       final response = await _supabase
           .from('chat_rooms')
           .select()
           .eq('is_group', false)
-          .contains('participants', [user1Id, user2Id])
+          .contains('participants', participants)
           .limit(1)
           .maybeSingle();
 
