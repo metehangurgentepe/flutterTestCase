@@ -214,14 +214,26 @@ class MessageBubbleBuilder extends ConsumerWidget {
     final isCurrentUser = message.senderId == currentUserId;
     
     final userData = ref.watch(userProfileProvider(message.senderId));
+    final roomAsync = ref.watch(roomProvider(message.roomId));
 
     return userData.when(
-      data: (user) => MessageBubble(
-        key: ValueKey(message.id),
-        message: message,
-        isCurrentUser: isCurrentUser,
-        senderName: user?.username ?? 'Unknown User',
-        avatarUrl: user?.avatarUrl,
+      data: (user) => roomAsync.when(
+        data: (room) => MessageBubble(
+          key: ValueKey(message.id),
+          message: message,
+          isCurrentUser: isCurrentUser,
+          senderName: user?.username ?? 'Unknown User',
+          avatarUrl: user?.avatarUrl,
+          showAvatar: room.isGroup, 
+        ),
+        loading: () => const MessageBubbleShimmer(),
+        error: (_, __) => MessageBubble(
+          key: ValueKey(message.id),
+          message: message,
+          isCurrentUser: isCurrentUser,
+          senderName: 'Unknown User',
+          showAvatar: false,
+        ),
       ),
       loading: () => const MessageBubbleShimmer(),
       error: (error, _) {
@@ -231,6 +243,7 @@ class MessageBubbleBuilder extends ConsumerWidget {
           message: message,
           isCurrentUser: isCurrentUser,
           senderName: 'Unknown User',
+          showAvatar: false,
         );
       },
     );

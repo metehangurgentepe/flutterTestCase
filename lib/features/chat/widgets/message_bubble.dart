@@ -6,6 +6,7 @@ class MessageBubble extends StatelessWidget {
   final bool isCurrentUser;
   final String senderName;
   final String? avatarUrl;
+  final bool showAvatar; // Add this parameter
 
   const MessageBubble({
     super.key,
@@ -13,6 +14,7 @@ class MessageBubble extends StatelessWidget {
     required this.isCurrentUser,
     required this.senderName,
     this.avatarUrl,
+    this.showAvatar = true, // Default to true
   });
 
   @override
@@ -23,7 +25,7 @@ class MessageBubble extends StatelessWidget {
         mainAxisAlignment: isCurrentUser ? MainAxisAlignment.end : MainAxisAlignment.start,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (!isCurrentUser) ...[
+          if (!isCurrentUser && showAvatar) ...[
             CircleAvatar(
               radius: 16,
               backgroundImage: avatarUrl != null ? NetworkImage(avatarUrl!) : null,
@@ -76,7 +78,7 @@ class MessageBubble extends StatelessWidget {
               ],
             ),
           ),
-          if (isCurrentUser) ...[
+          if (isCurrentUser && showAvatar) ...[
             const SizedBox(width: 8),
             CircleAvatar(
               radius: 16,
