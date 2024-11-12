@@ -1,14 +1,15 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test_case/features/chat/provider/chat_room_providers.dart';
 
 class MessageBar extends ConsumerStatefulWidget {
   final String roomId;
+  final Function(Object error)? onError;
 
   const MessageBar({
     Key? key,
     required this.roomId,
+    this.onError,
   }) : super(key: key);
 
   @override
@@ -32,9 +33,7 @@ class _MessageBarState extends ConsumerState<MessageBar> {
       _controller.clear();
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error sending message: $e')),
-        );
+        widget.onError?.call(e);
       }
     } finally {
       if (mounted) {

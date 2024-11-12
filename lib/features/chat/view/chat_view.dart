@@ -9,6 +9,7 @@ import 'package:test_case/features/chat/provider/presence_provider.dart';
 import 'package:test_case/features/chat/widgets/chat_header_view.dart';
 import 'package:test_case/features/chat/widgets/message_bar.dart';
 import 'package:test_case/features/chat/widgets/message_bubble.dart';
+import 'package:test_case/core/widgets/error_view.dart'; // Add this import
 
 class ChatRoomView extends ConsumerStatefulWidget {
   final String roomId;
@@ -34,6 +35,30 @@ class _ChatRoomViewState extends ConsumerState<ChatRoomView> {
     });
   }
 
+  void _handleError(Object error) {
+    String errorMessage = 'An unexpected error occurred';
+    
+    if (error is ChatRoomCreationException) {
+      errorMessage = error.message;
+    } else if (error is MessageSendException) {
+      errorMessage = error.message;
+    } else if (error is ProfileFetchException) {
+      errorMessage = 'Could not load user profile';
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(errorMessage),
+        backgroundColor: Colors.red,
+        action: SnackBarAction(
+          label: 'Retry',
+          textColor: Colors.white,
+          onPressed: () => ref.read(messagesProvider(widget.roomId).notifier).loadMessages(),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final roomAsync = ref.watch(roomProvider(widget.roomId));
@@ -42,20 +67,7 @@ class _ChatRoomViewState extends ConsumerState<ChatRoomView> {
     ref.watch(chatProvider);
 
     ref.listen<AsyncValue>(chatProvider, (_, state) {
-      state.whenOrNull(
-        error: (error, _) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(error is ChatRoomCreationException
-                  ? (error).message
-                  : error is MessageSendException
-                      ? (error).message
-                      : 'An error occurred'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        },
-      );
+      state.whenOrNull(error: (error, _) => _handleError(error));
     });
 
     return Scaffold(
@@ -63,19 +75,29 @@ class _ChatRoomViewState extends ConsumerState<ChatRoomView> {
         automaticallyImplyLeading: true,
         title: roomAsync.when(
           data: (room) => _buildHeader(room),
-          loading: () => const SizedBox.shrink(),
-          error: (error, stack) => Text('Error: $error'),
+          loading: () => const CircularProgressIndicator(),
+          error: (error, _) => ErrorView(
+            message: 'Could not load chat room',
+            onRetry: () => ref.refresh(roomProvider(widget.roomId)),
+          ),
         ),
         titleSpacing: 0,
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _buildMessagesList(),
-          ),
-          MessageBar(roomId: widget.roomId),
-        ],
-      ),
+      body: _buildBody(),
+    );
+  }
+
+  Widget _buildBody() {
+    return Column(
+      children: [
+        Expanded(
+          child: _buildMessagesList(),
+        ),
+        MessageBar(
+          roomId: widget.roomId,
+          onError: _handleError,
+        ),
+      ],
     );
   }
 
@@ -146,41 +168,49 @@ class _ChatRoomViewState extends ConsumerState<ChatRoomView> {
           );
         }
 
-        return ListView.builder(
-          reverse: true,
-          padding: const EdgeInsets.all(8.0),
-          itemCount: messages.length,
-          itemBuilder: (context, index) {
-            final message = messages[index];
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 8.0),
-              child: MessageBubbleBuilder(message: message),
-            );
-          },
+        return RefreshIndicator(
+          onRefresh: () => ref.read(messagesProvider(widget.roomId).notifier).loadMessages(),
+          child: ListView.builder(
+            reverse: true,
+            padding: const EdgeInsets.all(8.0),
+            itemCount: messages.length,
+            itemBuilder: (context, index) {
+              final message = messages[index];
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 8.0),
+                child: MessageBubbleBuilder(
+                  message: message,
+                  onError: _handleError,
+                ),
+              );
+            },
+          ),
         );
       },
       loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) {
-        return Center(child: Text('Error: $error'));
-      },
+      error: (error, stack) => ErrorView(
+        message: 'Could not load messages',
+        error: error,
+        onRetry: () => ref.read(messagesProvider(widget.roomId).notifier).loadMessages(),
+      ),
     );
   }
 }
 
 class MessageBubbleBuilder extends ConsumerWidget {
   final ChatMessage message;
+  final Function(Object error)? onError;
 
   const MessageBubbleBuilder({
     super.key,
     required this.message,
+    this.onError,
   });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentUserId = ref.read(supabaseClientProvider).auth.currentUser?.id;
     final isCurrentUser = message.senderId == currentUserId;
-
     final userProfileAsync = ref.watch(userProfileProvider(message.senderId));
 
     return userProfileAsync.when(
@@ -191,18 +221,29 @@ class MessageBubbleBuilder extends ConsumerWidget {
         senderName: userData['displayName'] ?? 'Unknown User',
         avatarUrl: userData['avatarUrl'],
       ),
-      loading: () => MessageBubble(
-        key: ValueKey(message.id),
-        message: message,
-        isCurrentUser: isCurrentUser,
-        senderName: 'Loading...',
-      ),
-      error: (_, __) => MessageBubble(
-        key: ValueKey(message.id),
-        message: message,
-        isCurrentUser: isCurrentUser,
-        senderName: 'Unknown User',
-      ),
+      loading: () => const MessageBubbleShimmer(),
+      error: (error, _) {
+        onError?.call(error);
+        return MessageBubble(
+          key: ValueKey(message.id),
+          message: message,
+          isCurrentUser: isCurrentUser,
+          senderName: 'Unknown User',
+        );
+      },
+    );
+  }
+}
+
+// Add this new widget
+class MessageBubbleShimmer extends StatelessWidget {
+  const MessageBubbleShimmer({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      // Add shimmer effect implementation
+      // ...
     );
   }
 }

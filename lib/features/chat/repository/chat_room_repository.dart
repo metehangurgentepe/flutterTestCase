@@ -11,7 +11,6 @@ abstract class IChatRoomRepository {
   Future<void> markAsRead(String messageId);
   Future<Map<String, dynamic>> getUserProfile(String userId);
   Stream<List<ChatRoom>> getChatRooms(String userId);
-  
 }
 
 class ChatRoomRepository implements IChatRoomRepository {
@@ -23,6 +22,89 @@ class ChatRoomRepository implements IChatRoomRepository {
 
   @override
   String? get currentUserId => _supabase.auth.currentUser?.id;
+
+  @override
+  Stream<List<ChatMessage>> getMessages(String roomId) {
+    _setupRealtimeSubscription(roomId);
+    return _getMessagesStream(roomId);
+  }
+
+  void _setupRealtimeSubscription(String roomId) {
+    if (_channels.containsKey(roomId)) return;
+
+    final channel = _supabase.channel('room-$roomId')
+      ..onPostgresChanges(
+        event: PostgresChangeEvent.all,
+        schema: 'public',
+        table: 'messages',
+        filter: PostgresChangeFilter(
+          type: PostgresChangeFilterType.eq,
+          column: 'room_id',
+          value: roomId,
+        ),
+        callback: (_) => _invalidateCache(roomId),
+      ).subscribe();
+
+    _channels[roomId] = channel;
+  }
+
+  Stream<List<ChatMessage>> _getMessagesStream(String roomId) {
+    final cacheKey = 'messages_$roomId';
+    
+    return _supabase
+        .from('messages')
+        .stream(primaryKey: ['id'])
+        .eq('room_id', roomId)
+        .order('created_at')
+        .map((data) => _processMessages(data, cacheKey));
+  }
+
+  List<ChatMessage> _processMessages(List<dynamic> data, String cacheKey) {
+    final messages = data.map((json) => ChatMessage.fromJson(json)).toList();
+    _cache.set(cacheKey, messages);
+    return messages;
+  }
+
+  @override
+  Future<void> sendMessage(ChatMessage message) async {
+    try {
+      await _supabase.from('messages').insert(message.toJson());
+      await _updateLastMessage(message);
+      _invalidateCache(message.roomId);
+    } catch (e) {
+      throw MessageSendException('Failed to send message', e);
+    }
+  }
+
+  Future<void> _updateLastMessage(ChatMessage message) async {
+    await _supabase.from('chat_rooms').update({
+      'last_message': message.content,
+      'last_message_time': message.createdAt.toIso8601String(),
+    }).eq('id', message.roomId);
+  }
+
+  void _invalidateCache(String roomId) {
+    _cache.remove('messages_$roomId');
+  }
+
+  @override
+  Future<void> markAsRead(String messageId) async {
+    try {
+      await _supabase
+          .from('messages')
+          .update({'is_read': true})
+          .eq('id', messageId);
+    } catch (e) {
+      throw MessageUpdateException('Failed to mark message as read', e);
+    }
+  }
+
+  @override
+  void dispose() {
+    _channels.values.forEach((channel) => channel.unsubscribe());
+    _channels.clear();
+    _cache.clear();
+  }
 
   @override
   Future<Map<String, dynamic>> getUserProfile(String userId) async {
@@ -41,41 +123,6 @@ class ChatRoomRepository implements IChatRoomRepository {
     } catch (e) {
       throw ProfileFetchException('Failed to fetch user profile', e);
     }
-  }
-
-  @override
-  Stream<List<ChatMessage>> getMessages(String roomId) {
-    if (!_channels.containsKey(roomId)) {
-      final channel = _supabase.channel('room-$roomId')
-        ..onPostgresChanges(
-          event: PostgresChangeEvent.all,
-          schema: 'public',
-          table: 'messages',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'room_id',
-            value: roomId,
-          ),
-          callback: (payload) {
-            _invalidateMessageCache(roomId);
-            _refreshMessages(roomId);
-          },
-        ).subscribe();
-
-      _channels[roomId] = channel;
-    }
-
-    return _supabase
-        .from('messages')
-        .stream(primaryKey: ['id'])
-        .eq('room_id', roomId)
-        .order('created_at', ascending: false)
-        .map((data) {
-          final messages =
-              data.map((json) => ChatMessage.fromJson(json)).toList();
-          _cache.set('messages_$roomId', messages);
-          return messages;
-        });
   }
 
   Future<Map<String, dynamic>> _getUserProfile(String userId) async {
@@ -156,29 +203,6 @@ class ChatRoomRepository implements IChatRoomRepository {
         });
   }
 
-  @override
-  Future<void> sendMessage(ChatMessage message) async {
-    try {
-      await _supabase.from('messages').insert(message.toJson());
-
-      await _supabase.from('chat_rooms').update({
-        'last_message': message.content,
-        'last_message_time': message.createdAt.toIso8601String(),
-      }).eq('id', message.roomId);
-
-      _cache.remove('messages_${message.roomId}');
-    } catch (e) {
-      throw MessageSendException('Failed to send message', e);
-    }
-  }
-
-  @override
-  Future<void> markAsRead(String messageId) async {
-    await _supabase
-        .from('messages')
-        .update({'is_read': true}).eq('id', messageId);
-  }
-
   Future<void> _refreshMessages(String roomId) async {
     try {
       final response = await _supabase
@@ -197,12 +221,5 @@ class ChatRoomRepository implements IChatRoomRepository {
 
   void _invalidateMessageCache(String roomId) {
     _cache.remove('messages_$roomId');
-  }
-
-  void dispose() {
-    for (final channel in _channels.values) {
-      channel.unsubscribe();
-    }
-    _channels.clear();
   }
 }

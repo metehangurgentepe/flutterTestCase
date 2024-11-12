@@ -21,4 +21,14 @@ class MessageSendException extends ChatException {
 class ProfileFetchException extends ChatException {
   ProfileFetchException(String message, [dynamic originalError]) 
     : super(message, originalError);
-} 
+}
+
+class MessageUpdateException implements Exception {
+  final String message;
+  final Object? originalError;
+
+  MessageUpdateException(this.message, [this.originalError]);
+
+  @override
+  String toString() => 'MessageUpdateException: $message${originalError != null ? ' ($originalError)' : ''}';
+}
