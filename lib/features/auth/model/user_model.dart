@@ -3,7 +3,6 @@
 enum UserRole {
   admin,
   moderator,
-  premiumUser,
   user
 }
 
@@ -54,9 +53,6 @@ class UserModel {
           ? DateTime.parse(json['created_at'] as String) 
           : DateTime.now(),
       role: _roleFromString(json['role'] as String?),
-      messageLimit: json['message_limit'] as int? ?? 100,
-      canCreateGroup: json['can_create_group'] as bool? ?? false,
-      isVerified: json['is_verified'] as bool? ?? false,
       isOnline: json['is_online'] as bool? ?? false,
       lastSeen: json['last_seen'] != null 
           ? DateTime.parse(json['last_seen'] as String)
@@ -88,9 +84,6 @@ class UserModel {
       'email': email,
       'created_at': createdAt.toIso8601String(),
       'role': _roleToString(role),
-      'message_limit': messageLimit,
-      'can_create_group': canCreateGroup,
-      'is_verified': isVerified,
       'is_online': isOnline,
       'last_seen': lastSeen?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
@@ -106,8 +99,6 @@ class UserModel {
         return UserRole.admin;
       case 'moderator':
         return UserRole.moderator;
-      case 'premium_user':
-        return UserRole.premiumUser;
       default:
         return UserRole.user;
     }
@@ -119,8 +110,6 @@ class UserModel {
         return 'admin';
       case UserRole.moderator:
         return 'moderator';
-      case UserRole.premiumUser:
-        return 'premium_user';
       case UserRole.user:
         return 'user';
     }

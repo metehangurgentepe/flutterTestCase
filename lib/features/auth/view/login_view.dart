@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test_case/features/auth/model/auth_failure.dart';
-import 'package:test_case/features/auth/providers/auth_providers.dart';
+import 'package:test_case/features/auth/providers/providers.dart';
 import 'package:test_case/features/auth/view/register_view.dart';
 import 'package:test_case/features/auth/widgets/auth_button.dart';
 import 'package:test_case/features/auth/widgets/auth_text_field.dart';

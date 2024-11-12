@@ -1,11 +1,11 @@
 import 'dart:async';
 import 'package:fpdart/fpdart.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:test_case/features/notifications/service/notification_service.dart';
+import 'package:test_case/features/auth/repository/profile_repository.dart';
+import 'package:test_case/core/notifications/service/notification_service.dart';
 import '../model/auth_failure.dart';
 import '../model/user_model.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:flutter/foundation.dart';
 
 abstract class IAuthRepository {
   Future<Either<AuthFailure, UserModel>> signInWithEmailAndPassword({
@@ -32,8 +32,13 @@ abstract class IAuthRepository {
 class AuthRepository implements IAuthRepository {
   final SupabaseClient _supabase;
   final NotificationService _notificationService;
+  final ProfileRepository _profileRepository;
 
-  AuthRepository(this._supabase, this._notificationService);
+  AuthRepository(
+    this._supabase,
+    this._notificationService,
+    this._profileRepository,
+  );
 
   @override
   Future<Either<AuthFailure, UserModel>> signInWithEmailAndPassword({
@@ -53,57 +58,14 @@ class AuthRepository implements IAuthRepository {
       await _notificationService.initialize();
       final token = await FirebaseMessaging.instance.getToken();
       
-      try {
-        final userData = await _supabase
-            .from('profiles')
-            .upsert({
-              'id': response.user!.id,
-              'username': email.split('@')[0],
-              'email': email,
-              'fcm_token': token,
-              'platform': Platform.ios == true ? 'ios' : 'android'
-            })
-            .select()
-            .maybeSingle();
-
-        if (userData == null) {
-          final newProfile = {
-            'id': response.user!.id,
-            'username': email.split('@')[0],
-            'email': email,
-            'created_at': DateTime.now().toIso8601String(),
-            'role': UserRole.user.toString().split('.').last,
-            'fcm_token': token,
-            'platform': Platform.ios == 'ios' ? 'ios' : 'android',
-          };
-
-          await _supabase.from('profiles').insert(newProfile);
-
-          return right(UserModel(
-            id: response.user!.id,
-            username: email.split('@')[0],
-            email: email,
-            createdAt: DateTime.now(),
-            role: UserRole.user,
-          ));
-        }
-
-        return right(UserModel.fromJson(userData as Map<String, dynamic>));
-      } catch (e) {
-        return right(UserModel(
-          id: response.user!.id,
-          username: email.split('@')[0],
-          email: email,
-          createdAt: DateTime.now(),
-          role: UserRole.user,
-        ));
-      }
+      return await _profileRepository.getOrCreateProfile(
+        userId: response.user!.id,
+        email: email,
+        token: token,
+      );
     } catch (e) {
       if (e.toString().contains('Invalid login credentials')) {
         return left(const AuthFailure.invalidEmailAndPasswordCombination());
-      }
-      if (e.toString().contains('Database error')) {
-        return left(const AuthFailure.serverError());
       }
       return left(const AuthFailure.serverError());
     }
@@ -117,51 +79,69 @@ class AuthRepository implements IAuthRepository {
     required UserRole role,
   }) async {
     try {
+      print('Starting signup process for email: $email');
+      
+      // Check for existing user - modified to handle empty results
+      try {
+        final existingUserQuery = await _supabase
+            .from('profiles')
+            .select()
+            .eq('email', email)
+            .maybeSingle();
+        
+        if (existingUserQuery != null) {
+          print('User already exists with email: $email');
+          return left(const AuthFailure.emailAlreadyInUse());
+        }
+      } catch (e) {
+        print('Error checking existing user: $e');
+        // Continue with signup if no user found
+      }
+
+      // Create auth user
       final response = await _supabase.auth.signUp(
         email: email,
-        password: password
+        password: password,
       );
 
       if (response.user == null) {
+        print('Auth signup failed: user is null');
         return left(const AuthFailure.serverError());
       }
 
-      try {
-        await _notificationService.initialize();
-        final token = await FirebaseMessaging.instance.getToken();
-        
-        final userProfile = {
-          'id': response.user!.id,
-          'username': username,
-          'email': email,
-          'created_at': DateTime.now().toIso8601String(),
-          'is_online': true,
-          'last_seen': DateTime.now().toIso8601String(),
-          'role': role.toString().split('.').last,
-          'fcm_token': token,
-          'platform': Platform.ios == 'ios' ? 'ios' : 'android',
-          'message_limit': 100,
-          'can_create_group': false,
-          'is_verified': false,
-          'updated_at': DateTime.now().toIso8601String(),
-        };
+      print('Auth signup successful. User ID: ${response.user!.id}');
 
-        await _supabase.from('profiles').insert(userProfile);
+      // Get FCM token
+      await _notificationService.initialize();
+      final token = await FirebaseMessaging.instance.getToken();
+      print('Got FCM token: $token');
 
-        return right(UserModel(
-          id: response.user!.id,
-          username: username,
-          email: email,
-          createdAt: DateTime.now(),
-          role: role,
-        ));
-      } catch (e) {
-        return left(const AuthFailure.serverError());
-      }
-    } catch (e) {
-      if (e.toString().contains('User already registered')) {
-        return left(const AuthFailure.emailAlreadyInUse());
-      }
+      // Create profile with delay to ensure auth is completed
+      await Future.delayed(const Duration(milliseconds: 500));
+      
+      final profileResult = await _profileRepository.createProfile(
+        userId: response.user!.id,
+        email: email,
+        username: username,
+        role: role,
+        token: token,
+      );
+
+      return profileResult.fold(
+        (failure) {
+          print('Profile creation failed: $failure');
+          _supabase.auth.signOut();
+          return left(failure);
+        },
+        (userModel) {
+          print('Profile created successfully: ${userModel.email}');
+          return right(userModel);
+        },
+      );
+
+    } catch (e, stackTrace) {
+      print('Signup error: $e');
+      print('Stack trace: $stackTrace');
       return left(const AuthFailure.serverError());
     }
   }
@@ -180,105 +160,49 @@ class AuthRepository implements IAuthRepository {
   Future<Option<UserModel>> getCurrentUser() async {
     try {
       final user = _supabase.auth.currentUser;
-
-      if (user == null) return none();
-
-      try {
-        final userData = await _supabase
-            .from('profiles')
-            .select()
-            .eq('id', user.id)
-            .maybeSingle();
-
-        if (userData == null) {
-          final newProfile = {
-            'id': user.id,
-            'username': user.email?.split('@')[0] ?? 'user',
-            'email': user.email,
-            'created_at': DateTime.now().toIso8601String(),
-            'role': UserRole.user.toString().split('.').last,
-          };
-
-          await _supabase.from('profiles').insert(newProfile);
-
-          final insertedData = await _supabase
-              .from('profiles')
-              .select()
-              .eq('id', user.id)
-              .single();
-
-          return some(UserModel.fromJson(insertedData as Map<String, dynamic>));
-        }
-
-        return some(UserModel.fromJson(userData as Map<String, dynamic>));
-      } catch (e) {
-        return some(UserModel(
-          id: user.id,
-          username: user.email?.split('@')[0] ?? 'user',
-          email: user.email ?? '',
-          createdAt: DateTime.now(),
-          role: UserRole.user,
-        ));
-      }
+      if (user == null) return Future.value(none());
+      
+      return await _profileRepository.getUserProfile(user.id);
     } catch (e) {
-      return none();
+      return Future.value(none());
     }
   }
 
   @override
   Stream<Option<UserModel>> authStateChanges() {
-    return Stream.fromIterable([none()]).asyncMap((_) async {
-      final user = _supabase.auth.currentUser;
-      if (user == null) return none();
-
-      try {
-        final userData = await _supabase
-            .from('profiles')
-            .select()
-            .eq('id', user.id)
-            .single();
-
-        return some(UserModel.fromJson(userData as Map<String, dynamic>));
-      } catch (e) {
-        return some(UserModel(
-          id: user.id,
-          username: user.email ?? '',
-          createdAt: DateTime.now(),
-          email: '', 
-          role: UserRole.user,
-        ));
+    return _supabase.auth.onAuthStateChange.asyncMap((event) async {
+      print('Auth state changed: ${event.event}');
+      
+      if (event.session == null) {
+        print('No session found');
+        return const None();
       }
+      
+      final userProfile = await _profileRepository.getUserProfile(event.session!.user.id);
+      print('User profile fetched: ${userProfile.toString()}');
+      
+      return userProfile;
+    }).handleError((error) {
+      print('Auth state stream error: $error');
+      return const None();
     });
   }
-  
-  @override
-Future<Either<AuthFailure, UserModel>> checkAuthStatus() async {
-  try {
-    final user = _supabase.auth.currentUser;
-    
-    if (user == null) {
-      return left(const AuthFailure.unauthenticated());
-    }
 
+  @override
+  Future<Either<AuthFailure, UserModel>> checkAuthStatus() async {
     try {
-      final userData = await _supabase
-          .from('profiles')
-          .select()
-          .eq('id', user.id)
-          .single();
-          
-      return right(UserModel.fromJson(userData as Map<String, dynamic>));
+      final user = _supabase.auth.currentUser;
+      if (user == null) {
+        return left(const AuthFailure.unauthenticated());
+      }
+
+      final profileResult = await _profileRepository.getUserProfile(user.id);
+      return profileResult.match(
+        () => left(const AuthFailure.serverError()),
+        (profile) => right(profile),
+      );
     } catch (e) {
-      return right(UserModel(
-        id: user.id,
-        username: user.email?.split('@')[0] ?? 'user',
-        email: user.email ?? '',
-        createdAt: DateTime.now(), 
-        role: UserRole.user,
-      ));
+      return left(const AuthFailure.serverError());
     }
-  } catch (e) {
-    return left(const AuthFailure.serverError());
   }
-}
 }
