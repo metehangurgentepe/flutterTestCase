@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/auth/providers/providers.dart';
 import 'package:test_case/features/home/models/chat_room_model.dart';
 import 'package:test_case/features/chat/view/chat_view.dart';
 import 'package:test_case/features/home/providers/chat_provider.dart';
+import 'package:test_case/core/widgets/error_view.dart';
+import 'package:test_case/core/widgets/loading_view.dart';
 
 class CreateChatSheet extends ConsumerStatefulWidget {
   const CreateChatSheet({super.key});
@@ -40,7 +43,7 @@ class _CreateChatSheetState extends ConsumerState<CreateChatSheet> {
     final currentUser = ref.watch(authStateProvider).value;
 
     if (currentUser == null) {
-      return const SizedBox.shrink();
+      return const ErrorView(message: 'User not authenticated');
     }
 
     return DraggableScrollableSheet(
@@ -88,109 +91,108 @@ class _CreateChatSheetState extends ConsumerState<CreateChatSheet> {
             const SizedBox(height: 16),
             Expanded(
               child: usersAsync.when(
-                data: (users) {
-                  final filteredUsers = users.where((user) {
-                    return user.id != currentUser.id;
-                  }).toList();
-
-                  if (filteredUsers.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.person_search,
-                              size: 48, color: Colors.grey[400]),
-                          const SizedBox(height: 16),
-                          Text(
-                            'No users found',
-                            style: TextStyle(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return ListView.builder(
-                    itemBuilder: (context, index) {
-                      final user = users[index];
-                      return ListTile(
-                        title: Text(user.username),
-                        onTap: () async {
-                          final currentUser = ref.read(authStateProvider).value;
-                          if (currentUser != null) {
-                            final room = ChatRoom(
-                              name: user.username,
-                              isGroup: false,
-                              id: null,
-                              participants: [
-                                currentUser.id,
-                                user.id,
-                              ],
-                            );
-
-                            try {
-                              final createdRoom = await ref
-                                  .read(chatListProvider.notifier)
-                                  .createChatRoom(room);
-
-                              if (context.mounted) {
-                                Navigator.pop(context);
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => ChatRoomView(
-                                      roomId: createdRoom.id ?? '',
-                                      roomName:
-                                          createdRoom.name ?? user.username,
-                                    ),
-                                  ),
-                                );
-                              }
-                            } catch (e) {
-                              if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                      content: Text(
-                                          'Failed to create chat room: $e')),
-                                );
-                              }
-                            }
-                          }
-                        },
-                      );
-                    },
-                    itemCount: users.length,
-                  );
-                },
-                loading: () => const Center(
-                  child: CircularProgressIndicator(),
-                ),
-                error: (error, stack) => Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.error_outline,
-                          size: 48, color: Colors.red),
-                      const SizedBox(height: 16),
-                      Text(
-                        'Error: ${error.toString()}',
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: () {
-                          ref.refresh(usersProvider(_searchQuery));
-                        },
-                        child: const Text('Retry'),
-                      ),
-                    ],
+                data: (users) => _UsersList(
+                  users: users,
+                  currentUserId: currentUser.id,
+                  onUserSelected: (selectedUser) => _createChatRoom(
+                    context, 
+                    selectedUser, 
+                    currentUser,
                   ),
+                ),
+                loading: () => const LoadingView(),
+                error: (error, _) => ErrorView(
+                  message: 'Failed to load users: $error',
+                  onRetry: () => ref.refresh(usersProvider(_searchQuery)),
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Future<void> _createChatRoom(
+    BuildContext context,
+    UserModel selectedUser,
+    UserModel currentUser,
+  ) async {
+    try {
+      final room = ChatRoom(
+        name: selectedUser.username,
+        isGroup: false,
+        id: null,
+        participants: [currentUser.id, selectedUser.id],
+      );
+
+      final createdRoom = await ref
+          .read(chatListProvider.notifier)
+          .createChatRoom(room);
+
+      if (context.mounted) {
+        Navigator.pop(context);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ChatRoomView(
+              roomId: createdRoom.id ?? '',
+              roomName: createdRoom.name ?? selectedUser.username,
+            ),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to create chat room: $e')),
+        );
+      }
+    }
+  }
+}
+
+// Add this class at the end of the file
+class _UsersList extends StatelessWidget {
+  final List<UserModel> users;
+  final String currentUserId;
+  final void Function(UserModel) onUserSelected;
+
+  const _UsersList({
+    required this.users,
+    required this.currentUserId,
+    required this.onUserSelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredUsers = users.where((user) => user.id != currentUserId).toList();
+
+    if (filteredUsers.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person_search, size: 48, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              'No users found',
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      itemCount: filteredUsers.length,
+      itemBuilder: (context, index) {
+        final user = filteredUsers[index];
+        return ListTile(
+          title: Text(user.username),
+          onTap: () => onUserSelected(user),
+        );
+      },
     );
   }
 }

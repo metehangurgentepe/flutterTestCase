@@ -4,6 +4,7 @@ import 'package:test_case/core/utils/helpers/cache_manager.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
 import 'package:test_case/features/home/models/chat_room_model.dart';
 
+// Repository interface
 abstract class IChatRepository {
   String? get currentUserId;
   Stream<List<ChatRoom>> getChatRooms(String userId);
@@ -11,50 +12,43 @@ abstract class IChatRepository {
   Future<ChatRoom> createChatRoom(ChatRoom room);
   Stream<List<ChatRoom>> getGroupRooms(String userId);
   Stream<List<ChatRoom>> getChatRoomsStream(String userId);
+  Future<Map<String, dynamic>> getUserProfile(String userId);
+  void dispose();
 }
 
 class ChatRepository implements IChatRepository {
   final SupabaseClient _supabase;
   final CacheManager _cache;
-  final Map<String, RealtimeChannel> _channels = {};
+  final Map<String, RealtimeChannel> _channels;
 
-  ChatRepository(this._supabase) : _cache = CacheManager();
+  ChatRepository(this._supabase)
+      : _cache = CacheManager(),
+        _channels = {};
 
   @override
   String? get currentUserId => _supabase.auth.currentUser?.id;
 
-  // Extract profile fetching logic to a separate method
-  @override
-  Future<Map<String, dynamic>> getUserProfile(String userId) async {
-    return await _withCache('profile_$userId', () async {
-      final profile = await _supabase.from('profiles').select().eq('id', userId).single();
-      return profile;
-    });
-  }
-
-  // Generic cache wrapper
+  /// Generic cache wrapper for data operations
   Future<T> _withCache<T>(String key, Future<T> Function() fetchData) async {
-    if (_cache.hasValid(key)) {
-      return _cache.get<T>(key)!;
-    }
-
+    if (_cache.hasValid(key)) return _cache.get<T>(key)!;
     final data = await fetchData();
     _cache.set(key, data);
     return data;
   }
 
+  /// Fetch and cache user profile
   @override
-  Stream<List<ChatRoom>> getChatRoomsStream(String userId) {
-    return _supabase
+  Future<Map<String, dynamic>> getUserProfile(String userId) => 
+    _withCache('profile_$userId', () => 
+      _supabase.from('profiles').select().eq('id', userId).single());
+
+  @override
+  Stream<List<ChatRoom>> getChatRoomsStream(String userId) =>
+    _supabase
         .from('chat_rooms')
         .stream(primaryKey: ['id'])
         .order('last_message_time', ascending: false)
-        .map(_mapToChatRooms);
-  }
-
-  List<ChatRoom> _mapToChatRooms(List<Map<String, dynamic>> data) {
-    return data.map((room) => ChatRoom.fromJson(room)).toList();
-  }
+        .map((data) => data.map((room) => ChatRoom.fromJson(room)).toList());
 
   @override
   Future<ChatRoom> createChatRoom(ChatRoom room) async {
@@ -64,27 +58,29 @@ class ChatRepository implements IChatRepository {
         if (existingRoom != null) return existingRoom;
       }
 
-      final roomData = _prepareChatRoomData(room);
-      final response = await _supabase.from('chat_rooms').insert(roomData).select().single();
-      _invalidateRoomCaches(room);
+      final response = await _supabase
+          .from('chat_rooms')
+          .insert(_prepareChatRoomData(room))
+          .select()
+          .single();
 
+      _invalidateRoomCaches(room);
       return ChatRoom.fromJson(response);
     } catch (e) {
       throw ChatRoomCreationException('Failed to create chat room', e);
     }
   }
 
-  Map<String, dynamic> _prepareChatRoomData(ChatRoom room) {
-    return {
-      'name': room.name,
-      'is_group': room.isGroup,
-      'participants': room.participants,
-      'created_at': DateTime.now().toIso8601String(),
-      'last_message': null,
-      'last_message_time': null,
-      'image_url': room.imageUrl,
-    };
-  }
+  // Helper methods
+  Map<String, dynamic> _prepareChatRoomData(ChatRoom room) => {
+    'name': room.name,
+    'is_group': room.isGroup,
+    'participants': room.participants,
+    'created_at': DateTime.now().toIso8601String(),
+    'last_message': null,
+    'last_message_time': null,
+    'image_url': room.imageUrl,
+  };
 
   void _invalidateRoomCaches(ChatRoom room) {
     for (final userId in room.participants) {
@@ -105,52 +101,44 @@ class ChatRepository implements IChatRepository {
         .stream(primaryKey: ['id'])
         .eq('is_group', false)
         .order('created_at', ascending: false)
-        .asyncMap((data) async {
-          final List<ChatRoom> rooms = [];
-          final List<Future<void>> profileFutures = [];
-          final List<String> errorMessages = [];
-
-          for (final json in data) {
-            try {
-              final otherUserId = (json['participants'] as List)
-                  .cast<String>()
-                  .firstWhere((id) => id != userId);
-
-              profileFutures
-                  .add(getUserProfile(otherUserId).then((otherUserProfile) {
-                rooms.add(ChatRoom(
-                  id: json['id'],
-                  name: otherUserProfile['username'],
-                  isGroup: false,
-                  lastMessage: json['last_message'],
-                  lastMessageTime: json['last_message_time'] != null
-                      ? DateTime.parse(json['last_message_time'])
-                      : null,
-                  imageUrl: otherUserProfile['avatar_url'],
-                  createdAt: DateTime.parse(json['created_at']),
-                  participants: List<String>.from(json['participants']),
-                ));
-              }).catchError((e) {
-                errorMessages
-                    .add('Failed to fetch profile for user $otherUserId: $e');
-              }));
-            } catch (e) {
-              errorMessages.add('Error processing chat room data: $e');
-            }
-          }
-
-          await Future.wait(profileFutures);
-
-          if (errorMessages.isNotEmpty) {
-            errorMessages.forEach(print);
-          }
-
-          rooms.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-
-          _cache.set(cacheKey, rooms);
-          return rooms;
-        });
+        .asyncMap((data) => _processChatRoomsData(data, userId));
   }
+
+  Future<List<ChatRoom>> _processChatRoomsData(
+      List<Map<String, dynamic>> data, String userId) async {
+    final rooms = <ChatRoom>[];
+    final errors = <String>[];
+
+    await Future.wait(
+      data.map((json) async {
+        try {
+          final otherUserId = (json['participants'] as List<String>)
+              .firstWhere((id) => id != userId);
+          final profile = await getUserProfile(otherUserId);
+          rooms.add(_mapToChatRoom(json, profile));
+        } catch (e) {
+          errors.add('Error processing chat room: $e');
+        }
+      }),
+    );
+
+    if (errors.isNotEmpty) errors.forEach(print);
+    return rooms..sort((a, b) => b.createdAt.compareTo(a.createdAt));
+  }
+
+  ChatRoom _mapToChatRoom(Map<String, dynamic> json, Map<String, dynamic> profile) =>
+      ChatRoom(
+        id: json['id'],
+        name: profile['username'],
+        isGroup: false,
+        lastMessage: json['last_message'],
+        lastMessageTime: json['last_message_time'] != null
+            ? DateTime.parse(json['last_message_time'])
+            : null,
+        imageUrl: profile['avatar_url'],
+        createdAt: DateTime.parse(json['created_at']),
+        participants: List<String>.from(json['participants']),
+      );
 
   @override
   Stream<List<ChatRoom>> getGroupRooms(String userId) {
@@ -253,10 +241,12 @@ class ChatRepository implements IChatRepository {
     _cache.remove('profile_$userId');
   }
 
+  @override
   void dispose() {
     for (final channel in _channels.values) {
       channel.unsubscribe();
     }
     _channels.clear();
+    _cache.clear();
   }
 }

@@ -1,4 +1,3 @@
-
 import 'package:flutter/material.dart';
 
 class ErrorView extends StatelessWidget {
@@ -19,31 +18,30 @@ class ErrorView extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
+          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+          const SizedBox(height: 16),
           Text(
             message,
-            style: const TextStyle(color: Colors.red),
             textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-          if (error != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8.0),
-              child: Text(
-                error.toString(),
-                style: const TextStyle(
-                  color: Colors.grey,
-                  fontSize: 12,
-                ),
-                textAlign: TextAlign.center,
-              ),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              error.toString(),
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Colors.red[300],
+                  ),
             ),
-          if (onRetry != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 16.0),
-              child: ElevatedButton(
-                onPressed: onRetry,
-                child: const Text('Retry'),
-              ),
+          ],
+          if (onRetry != null) ...[
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: onRetry,
+              child: const Text('Retry'),
             ),
+          ],
         ],
       ),
     );

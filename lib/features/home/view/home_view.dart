@@ -3,10 +3,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test_case/features/auth/providers/providers.dart';
 import 'package:test_case/features/auth/view/auth_wrapper.dart';
 import 'package:test_case/features/chat/view/chat_view.dart';
+import 'package:test_case/features/home/models/chat_room_model.dart';
 import 'package:test_case/features/home/providers/chat_provider.dart';
 import 'package:test_case/features/home/view/create_chat_sheet_view.dart';
 import 'package:test_case/features/home/view/create_group_sheet_view.dart';
 import 'package:test_case/features/home/widgets/chat_list_tile.dart';
+import 'package:test_case/core/widgets/error_view.dart';
+import 'package:test_case/core/widgets/loading_view.dart';
 
 class HomeView extends ConsumerStatefulWidget {
   const HomeView({super.key});
@@ -202,39 +205,19 @@ class _PersonalChatsList extends ConsumerWidget {
         final personalChats = rooms.where((room) => !room.isGroup).toList();
 
         if (personalChats.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.chat_bubble_outline, size: 48, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('No chats yet', style: TextStyle(color: Colors.grey)),
-              ],
-            ),
+          return const _EmptyView(
+            icon: Icons.chat_bubble_outline,
+            message: 'No chats yet',
           );
         }
 
-        return ListView.builder(
-          itemCount: personalChats.length,
-          itemBuilder: (context, index) {
-            final room = personalChats[index];
-            return ChatRoomListTile(
-              room: room,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatRoomView(
-                    roomId: room.id ?? '',
-                    roomName: room.name ?? 'Chat',
-                  ),
-                ),
-              ),
-            );
-          },
-        );
+        return _ChatRoomListView(rooms: personalChats);
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => Center(child: Text('Error: $error')),
+      loading: () => const LoadingView(),
+      error: (error, stack) => ErrorView(
+        message: 'Failed to load chats: $error',
+        onRetry: () => ref.refresh(chatRoomsProvider(userId)),
+      ),
     );
   }
 }
@@ -251,40 +234,72 @@ class _GroupChatsList extends ConsumerWidget {
     return groupRoomsAsync.when(
       data: (rooms) {
         if (rooms.isEmpty) {
-          return const Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.group_outlined, size: 48, color: Colors.grey),
-                SizedBox(height: 16),
-                Text('No group chats yet',
-                    style: TextStyle(color: Colors.grey)),
-              ],
-            ),
+          return const _EmptyView(
+            icon: Icons.group_outlined,
+            message: 'No group chats yet',
           );
         }
 
-        return ListView.builder(
-          itemCount: rooms.length,
-          itemBuilder: (context, index) {
-            final room = rooms[index];
-            return ChatRoomListTile(
-              room: room,
-              onTap: () => Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => ChatRoomView(
-                    roomId: room.id ?? '',
-                    roomName: room.name ?? 'Group Chat',
-                  ),
-                ),
-              ),
-            );
-          },
+        return _ChatRoomListView(rooms: rooms);
+      },
+      loading: () => const LoadingView(),
+      error: (error, stack) => ErrorView(
+        message: 'Failed to load group chats: $error',
+        onRetry: () => ref.refresh(groupRoomsProvider(userId)),
+      ),
+    );
+  }
+}
+
+class _EmptyView extends StatelessWidget {
+  final IconData icon;
+  final String message;
+
+  const _EmptyView({required this.icon, required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 48, color: Colors.grey),
+          const SizedBox(height: 16),
+          Text(message, style: const TextStyle(color: Colors.grey)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ChatRoomListView extends StatelessWidget {
+  final List<ChatRoom> rooms;
+
+  const _ChatRoomListView({required this.rooms});
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      itemCount: rooms.length,
+      itemBuilder: (context, index) {
+        final room = rooms[index];
+        return ChatRoomListTile(
+          room: room,
+          onTap: () => _navigateToChatRoom(context, room),
         );
       },
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (error, stack) => Center(child: Text('Error: $error')),
+    );
+  }
+
+  void _navigateToChatRoom(BuildContext context, ChatRoom room) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => ChatRoomView(
+          roomId: room.id ?? '',
+          roomName: room.name ?? 'Chat',
+        ),
+      ),
     );
   }
 }

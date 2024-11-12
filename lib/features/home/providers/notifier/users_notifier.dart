@@ -1,5 +1,3 @@
-
-
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:test_case/features/auth/model/user_model.dart';
