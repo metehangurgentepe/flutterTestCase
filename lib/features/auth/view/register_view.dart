@@ -6,8 +6,8 @@ import 'package:test_case/features/auth/providers/providers.dart';
 import 'package:test_case/features/auth/widgets/auth_button.dart';
 import 'package:test_case/features/auth/widgets/auth_text_field.dart';
 import 'package:test_case/features/home/view/home_view.dart';
-import 'package:test_case/features/auth/utils/auth_error_handler.dart';
 import 'package:test_case/features/auth/utils/auth_form_validator.dart';
+import 'package:test_case/features/auth/utils/auth_error_handler.dart';
 
 class RegisterView extends ConsumerStatefulWidget {
   const RegisterView({super.key});
@@ -24,30 +24,30 @@ class _RegisterViewState extends ConsumerState<RegisterView> {
   bool _isAdmin = false;
 
   Future<void> _handleSubmit() async {
-    if (!(_formKey.currentState?.validate() ?? false)) return;
-    
-    try {
-      final failure = await ref.read(authStateProvider.notifier).signUp(
-            email: _emailController.text.trim(),
-            password: _passwordController.text,
-            username: _usernameController.text.trim(),
-            role: _isAdmin ? UserRole.admin : UserRole.user,
+    if (_formKey.currentState?.validate() ?? false) {
+      try {
+        final failure = await ref.read(authStateProvider.notifier).signUp(
+              email: _emailController.text.trim(),
+              password: _passwordController.text,
+              username: _usernameController.text.trim(),
+              role: _isAdmin ? UserRole.admin : UserRole.user,
+            );
+
+        if (mounted && failure != null) {
+          AuthErrorHandler.showError(context, failure);
+          return;
+        }
+
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const HomeView()),
+            (route) => false,
           );
-
-      if (mounted && failure != null) {
-        AuthErrorHandler.showError(context, failure);
-        return;
-      }
-
-      if (mounted) {
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomeView()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        AuthErrorHandler.showError(context, const AuthFailure.serverError());
+        }
+      } catch (e) {
+        if (mounted) {
+          AuthErrorHandler.showError(context, e);
+        }
       }
     }
   }
